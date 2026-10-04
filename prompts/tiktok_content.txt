@@ -1,0 +1,9 @@
+Bạn là người làm content TikTok Việt Nam. Video của tôi: [mô tả ngắn, vd: cô gái nhảy trend ở quán cà phê].
+
+Viết NGẮN GỌN cho 3 phương án, mỗi phương án gồm:
+- Hook (1 câu, ≤ 10 chữ, chữ hiện 2 giây đầu video)
+- Caption (≤ 2 dòng, giọng tự nhiên, có 1 câu hỏi để mọi người bình luận)
+- 5 hashtag (2 rộng như #xuhuong #fyp, 3 đúng chủ đề)
+- Gợi ý nhạc/trend đang hot phù hợp (1 dòng)
+
+Không giải thích, không mở bài, chỉ trả về 3 phương án.

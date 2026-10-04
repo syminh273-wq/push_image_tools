@@ -1,0 +1,43 @@
+Create a realistic full-body dance video using the provided reference image as the primary visual source.
+IMPORTANT: Preserve the exact identity and appearance of the person from the reference image.
+FACE AND IDENTITY:
+
+Keep the exact same face, facial structure, eyes, nose, lips, skin tone and hairstyle.
+Do not redesign, beautify, replace or reinterpret the face.
+The person's identity must remain consistent throughout the entire video.
+No face morphing, no face swapping, no identity change.
+Facial features must remain stable during movement and camera motion.
+BODY AND CLOTHING:
+
+Preserve the person's body proportions, physique, clothing, colors, shoes and accessories from the reference image.
+Do not change or redesign the outfit.
+Do not add or remove accessories.
+Keep the same person throughout the entire video.
+BACKGROUND AND ENVIRONMENT:
+
+Preserve the original background, location, architecture, objects, colors, lighting and overall environment from the reference image.
+Do not replace the background with a different environment.
+Do not generate a new location.
+Do not add unnecessary objects or people.
+The background should remain visually consistent throughout the video.
+ACTION:
+
+Animate the person performing a natural, energetic dance.
+Keep the person's appearance unchanged while allowing realistic body movement.
+Full-body dancing with both feet and the entire body visible.
+Natural human anatomy and realistic motion.
+Realistic hands, fingers, arms and legs.
+CAMERA:
+
+Keep the camera relatively stable.
+Use subtle cinematic camera movement only.
+Do not excessively zoom in on the face.
+Keep the person fully visible for most of the video.
+VISUAL CONSISTENCY:
+The reference image is the source of truth for the person's identity, appearance, clothing and environment.
+Do not reinterpret the reference image.
+Do not change the person, face, outfit or location.
+QUALITY:
+Photorealistic video, natural skin texture, realistic human motion, consistent lighting, realistic physics, detailed face and hands.
+Avoid:
+face distortion, identity change, different person, different hairstyle, different clothes, different background, new location, extra people, extra limbs, missing limbs, deformed hands, duplicated body parts, unnatural anatomy, background replacement, flickering objects, sudden scene changes.

@@ -1,0 +1,11 @@
+[
+  {
+    "image": "./input/sample.png",
+    "video": "./Download.mp4",
+    "output": "./output/job-01.mp4"
+  },
+  {
+    "image": "./input/sample.png",
+    "prompt": "A woman performing a cinematic dance, slow camera dolly"
+  }
+]

@@ -1,0 +1,961 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Gemini Video Tool — Pair Queue</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            border: 'rgb(var(--border) / <alpha-value>)',
+            background: 'rgb(var(--background) / <alpha-value>)',
+            foreground: 'rgb(var(--foreground) / <alpha-value>)',
+            muted: 'rgb(var(--muted) / <alpha-value>)',
+            'muted-foreground': 'rgb(var(--muted-foreground) / <alpha-value>)',
+            primary: 'rgb(var(--primary) / <alpha-value>)',
+            'primary-foreground': 'rgb(var(--primary-foreground) / <alpha-value>)',
+            ring: 'rgb(var(--ring) / <alpha-value>)',
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    :root {
+      --background: 250 250 250;
+      --foreground: 23 23 23;
+      --border: 229 229 229;
+      --muted: 245 245 245;
+      --muted-foreground: 115 115 115;
+      --primary: 24 24 27;
+      --primary-foreground: 250 250 250;
+      --ring: 161 161 170;
+    }
+    .dark {
+      --background: 9 9 11;
+      --foreground: 250 250 250;
+      --border: 39 39 42;
+      --muted: 24 24 27;
+      --muted-foreground: 161 161 170;
+      --primary: 250 250 250;
+      --primary-foreground: 24 24 27;
+      --ring: 82 82 91;
+    }
+    html, body { background: rgb(var(--background)); color: rgb(var(--foreground)); }
+    body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+    .log-box { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+    .scrollbar-thin::-webkit-scrollbar-thumb { background: rgb(var(--border)); border-radius: 3px; }
+    .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+    @keyframes pulse-soft { 0%,100%{opacity:1} 50%{opacity:.55} }
+    .pulse { animation: pulse-soft 1.5s ease-in-out infinite; }
+    .ring-focus:focus-visible { outline: 2px solid rgb(var(--ring)); outline-offset: 2px; }
+  </style>
+</head>
+<body class="min-h-screen">
+
+  <!-- ─── NAVBAR ─────────────────────────────────────────────────────────── -->
+  <header class="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur">
+    <div class="max-w-[1400px] mx-auto px-4 h-14 flex items-center gap-3">
+      <div class="flex items-center gap-2 font-semibold tracking-tight whitespace-nowrap">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+        <span>Gemini Video Tool</span>
+      </div>
+
+      <nav class="flex items-center gap-1 ml-4 text-sm" aria-label="Views">
+        <button data-view="queue" class="view-btn px-3 h-8 rounded-md bg-muted font-medium ring-focus">Queue</button>
+        <button data-view="accounts" class="view-btn px-3 h-8 rounded-md hover:bg-muted ring-focus">Accounts</button>
+        <button data-view="processes" class="view-btn px-3 h-8 rounded-md hover:bg-muted ring-focus inline-flex items-center gap-1.5">
+          Processes
+          <span id="proc-count" class="hidden text-[10px] px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300">0</span>
+        </button>
+      </nav>
+
+      <div id="counts" class="hidden md:flex items-center gap-2 ml-4 text-xs">
+        <span class="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">queued <b id="c-queued">0</b></span>
+        <span class="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300">running <b id="c-running">0</b></span>
+        <span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">done <b id="c-done">0</b></span>
+        <span class="px-2 py-0.5 rounded-full bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300">failed <b id="c-failed">0</b></span>
+        <span id="slots-info" class="hidden ml-1 px-2 py-0.5 rounded-full bg-muted text-muted-foreground"></span>
+      </div>
+
+      <label class="hidden md:flex items-center gap-1.5 ml-3 text-xs cursor-pointer select-none" title="Always send the default prompt from prompts/default.txt — overrides per-pair prompt">
+        <input id="use-system-default" type="checkbox" class="rounded" />
+        <span>Use system default prompt</span>
+      </label>
+
+      <label class="hidden md:flex items-center gap-1.5 ml-3 text-xs cursor-pointer select-none" title="Show the Chrome windows while running. Google flags hidden (headless) browsers more often, and a visible window lets you clear a verification page yourself.">
+        <input id="show-browser" type="checkbox" class="rounded" />
+        <span>Show browser</span>
+      </label>
+
+      <div class="ml-auto flex items-center gap-2">
+        <button id="btn-demo" class="whitespace-nowrap inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 h-9 text-sm hover:bg-muted ring-focus" title="Create 3 sample pairs and Run All in parallel">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+          Demo
+        </button>
+        <button id="btn-add" class="whitespace-nowrap inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 h-9 text-sm hover:bg-muted ring-focus">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+          Add Pair
+        </button>
+        <button id="btn-run-all" class="whitespace-nowrap inline-flex items-center gap-1.5 rounded-md bg-primary text-primary-foreground px-4 h-9 text-sm font-medium hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed ring-focus">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          Run All
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ─── LAYOUT ─────────────────────────────────────────────────────────── -->
+  <main id="view-queue" class="max-w-[1400px] mx-auto px-4 py-4 grid grid-cols-1 lg:grid-cols-[360px_1fr] gap-4">
+
+    <!-- LEFT BAR -->
+    <aside class="space-y-3">
+      <div class="flex items-center justify-between">
+        <h2 class="text-sm font-medium text-muted-foreground">Queue</h2>
+        <div class="flex items-center gap-1 text-xs">
+          <button data-filter="all" class="filter-btn px-2 py-0.5 rounded bg-muted">All</button>
+          <button data-filter="queued" class="filter-btn px-2 py-0.5 rounded hover:bg-muted">Queued</button>
+          <button data-filter="running" class="filter-btn px-2 py-0.5 rounded hover:bg-muted">Running</button>
+          <button data-filter="done" class="filter-btn px-2 py-0.5 rounded hover:bg-muted">Done</button>
+          <button data-filter="failed" class="filter-btn px-2 py-0.5 rounded hover:bg-muted">Failed</button>
+        </div>
+      </div>
+      <div id="pairs" class="space-y-2 max-h-[calc(100vh-9rem)] overflow-y-auto scrollbar-thin pr-1"></div>
+      <div id="pairs-empty" class="hidden text-center text-sm text-muted-foreground border border-dashed border-border rounded-lg p-8">
+        <p>No pairs yet.</p>
+        <button onclick="document.getElementById('btn-add').click()" class="mt-2 underline text-foreground">Add your first pair</button>
+      </div>
+    </aside>
+
+    <!-- RIGHT BAR -->
+    <section>
+      <div id="detail" class="hidden">
+        <div class="rounded-xl border border-border bg-background">
+          <!-- tabs -->
+          <div class="flex items-center justify-between border-b border-border px-4">
+            <div class="flex">
+              <button data-tab="detail" class="tab-btn px-3 h-10 text-sm border-b-2 border-primary text-foreground">Detail</button>
+              <button data-tab="log" class="tab-btn px-3 h-10 text-sm border-b-2 border-transparent text-muted-foreground">Log</button>
+              <button data-tab="output" class="tab-btn px-3 h-10 text-sm border-b-2 border-transparent text-muted-foreground">Output</button>
+            </div>
+            <div class="flex items-center gap-1">
+              <button id="btn-retry" class="hidden text-xs px-2 py-1 rounded hover:bg-muted">Retry</button>
+              <button id="btn-delete" class="text-xs px-2 py-1 rounded hover:bg-muted text-red-600">Delete</button>
+            </div>
+          </div>
+
+          <div class="p-4 grid md:grid-cols-2 gap-4">
+            <div class="space-y-3">
+              <div>
+                <div class="text-xs text-muted-foreground mb-1">Image</div>
+                <img id="d-img" class="w-full max-h-72 object-contain rounded-md border border-border bg-muted" alt="image" />
+              </div>
+              <div id="d-video-wrap" class="hidden">
+                <div class="text-xs text-muted-foreground mb-1">Reference video</div>
+                <video id="d-vid" controls class="w-full max-h-72 rounded-md border border-border"></video>
+              </div>
+              <div id="d-output-wrap" class="hidden">
+                <div class="text-xs text-muted-foreground mb-1">Generated video</div>
+                <video id="d-out" controls class="w-full max-h-72 rounded-md border border-border"></video>
+                <a id="d-out-link" class="text-xs underline mt-1 inline-block" download>Download MP4</a>
+              </div>
+            </div>
+            <div class="space-y-3">
+              <div>
+                <div class="flex items-center justify-between">
+                  <div class="text-xs text-muted-foreground mb-1">Prompt</div>
+                  <span id="d-status-badge" class="text-xs px-2 py-0.5 rounded-full bg-muted">queued</span>
+                </div>
+                <textarea id="d-prompt" rows="6" class="w-full text-sm rounded-md border border-border bg-background p-2 ring-focus"></textarea>
+                <label class="text-xs flex items-center gap-2 mt-1">
+                  <input id="d-use-default" type="checkbox" class="rounded" /> Use default prompt
+                </label>
+              </div>
+              <div class="grid grid-cols-2 gap-2 text-xs">
+                <div class="col-span-2">
+                  <div class="text-muted-foreground">Account</div>
+                  <div id="d-account" class="mt-1 text-sm">auto</div>
+                </div>
+                <div>
+                  <div class="text-muted-foreground">Video start (s)</div>
+                  <input id="d-video-start" type="number" step="0.5" min="0" class="w-full mt-1 rounded-md border border-border bg-background px-2 py-1.5 text-sm ring-focus" />
+                </div>
+                <div>
+                  <div class="text-muted-foreground">Timeout (s)</div>
+                  <input id="d-timeout" type="number" min="60" step="30" class="w-full mt-1 rounded-md border border-border bg-background px-2 py-1.5 text-sm ring-focus" />
+                </div>
+              </div>
+              <div class="flex items-center gap-2 pt-1">
+                <button id="btn-save" class="rounded-md border border-border px-3 h-8 text-xs hover:bg-muted ring-focus">Save changes</button>
+                <button id="btn-run" class="rounded-md bg-primary text-primary-foreground px-3 h-8 text-xs font-medium hover:opacity-90 disabled:opacity-40 ring-focus">Run this pair</button>
+                <span id="d-hint" class="text-xs text-muted-foreground"></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- log tab body -->
+          <div id="log-body" class="hidden border-t border-border p-4">
+            <pre id="log" class="log-box text-xs whitespace-pre-wrap break-words max-h-[28rem] overflow-auto scrollbar-thin bg-muted/50 border border-border rounded-md p-3"></pre>
+          </div>
+          <div id="output-body" class="hidden border-t border-border p-4 text-sm text-muted-foreground">
+            Switch to the Output tab above the preview for the generated video.
+          </div>
+        </div>
+      </div>
+
+      <!-- gallery when nothing selected -->
+      <div id="gallery" class="rounded-xl border border-border bg-background p-4">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="font-medium">Generated videos</h2>
+          <span class="text-xs text-muted-foreground">from <code>output/</code></span>
+        </div>
+        <div id="gallery-grid" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm"></div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ─── PROCESSES VIEW ─────────────────────────────────────────────────── -->
+  <main id="view-processes" class="hidden max-w-[1400px] mx-auto px-4 py-4 space-y-4">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div class="rounded-xl border border-border bg-background p-3">
+        <div class="text-xs text-muted-foreground">Run All</div>
+        <div id="p-dispatcher" class="text-sm font-medium mt-1">idle</div>
+      </div>
+      <div class="rounded-xl border border-border bg-background p-3">
+        <div class="text-xs text-muted-foreground">Running / limit</div>
+        <div id="p-running" class="text-sm font-medium mt-1">0</div>
+      </div>
+      <div class="rounded-xl border border-border bg-background p-3">
+        <div class="text-xs text-muted-foreground">Waiting in queue</div>
+        <div id="p-queued" class="text-sm font-medium mt-1">0</div>
+      </div>
+      <div class="rounded-xl border border-border bg-background p-3">
+        <div class="text-xs text-muted-foreground">Accounts ready</div>
+        <div id="p-ready" class="text-sm font-medium mt-1">0</div>
+      </div>
+    </div>
+
+    <div class="rounded-xl border border-border bg-background">
+      <div class="flex items-center justify-between border-b border-border px-4 h-12">
+        <h2 class="font-medium text-sm">Running jobs</h2>
+        <span class="text-xs text-muted-foreground">refreshes every 2s</span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="text-xs text-muted-foreground">
+            <tr class="border-b border-border">
+              <th class="text-left font-normal px-4 py-2">Pair</th>
+              <th class="text-left font-normal px-4 py-2">Account</th>
+              <th class="text-left font-normal px-4 py-2">Step</th>
+              <th class="text-left font-normal px-4 py-2">Elapsed</th>
+              <th class="text-left font-normal px-4 py-2">Last log</th>
+              <th class="px-4 py-2"></th>
+            </tr>
+          </thead>
+          <tbody id="p-jobs"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ─── ACCOUNTS VIEW ──────────────────────────────────────────────────── -->
+  <main id="view-accounts" class="hidden max-w-[1400px] mx-auto px-4 py-4 space-y-4">
+    <div class="rounded-xl border border-border bg-background p-4">
+      <h2 class="font-medium text-sm">Add account</h2>
+      <p class="text-xs text-muted-foreground mt-1">
+        Enter a profile name (e.g. <code>pro_01</code>), the Gmail and its password, then press <b>Add &amp; sign in</b>.
+        A Chrome window opens and the tool fills Google's sign-in form for you; if Google asks for
+        2-Step Verification, confirm it on your phone — or give the <b>Authenticator key</b> (Google Account →
+        2-Step Verification → Authenticator → "Can't scan it?") and the code is entered for you. The password is kept in the macOS Keychain
+        (not in this folder), so the account signs back in by itself when a scan finds it signed out.
+        Leave Gmail/password empty to type them in the window yourself. Entering a password for an
+        existing profile name updates it.
+      </p>
+      <form id="acc-form" class="mt-3 flex flex-col sm:flex-row gap-2 sm:items-start" autocomplete="off">
+        <div class="flex-1 max-w-xs">
+          <label for="acc-name" class="sr-only">Profile name</label>
+          <input id="acc-name" required pattern="[A-Za-z0-9_\-]+" maxlength="40" placeholder="profile name, e.g. pro_01"
+                 class="w-full rounded-md border border-border bg-background px-3 h-9 text-sm ring-focus" />
+        </div>
+        <div class="flex-1 max-w-xs">
+          <label for="acc-email" class="sr-only">Gmail</label>
+          <input id="acc-email" type="email" maxlength="120" placeholder="Gmail (optional)" autocomplete="off"
+                 class="w-full rounded-md border border-border bg-background px-3 h-9 text-sm ring-focus" />
+        </div>
+        <div class="flex-1 max-w-xs">
+          <label for="acc-password" class="sr-only">Password</label>
+          <input id="acc-password" type="password" maxlength="200" placeholder="password (optional)" autocomplete="new-password"
+                 class="w-full rounded-md border border-border bg-background px-3 h-9 text-sm ring-focus" />
+        </div>
+        <div class="flex-1 max-w-xs">
+          <label for="acc-totp" class="sr-only">Authenticator key</label>
+          <input id="acc-totp" maxlength="80" placeholder="Authenticator key (optional)" autocomplete="off"
+                 title="Google Account → 2-Step Verification → Authenticator → Can't scan it? → the key shown"
+                 class="w-full rounded-md border border-border bg-background px-3 h-9 text-sm ring-focus" />
+          <p id="acc-form-error" class="hidden text-xs text-red-600 mt-1"></p>
+        </div>
+        <button type="submit" class="inline-flex items-center justify-center gap-1.5 rounded-md bg-primary text-primary-foreground px-4 h-9 text-sm font-medium hover:opacity-90 ring-focus">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/></svg>
+          Add &amp; sign in
+        </button>
+      </form>
+    </div>
+
+    <div class="rounded-xl border border-border bg-background">
+      <div class="flex items-center justify-between border-b border-border px-4 h-12">
+        <h2 class="font-medium text-sm">Accounts</h2>
+        <div class="flex items-center gap-2">
+          <span id="p-scan-state" class="text-xs text-muted-foreground"></span>
+          <button id="btn-scan" class="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 h-8 text-xs hover:bg-muted disabled:opacity-40 ring-focus">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>
+            Scan all
+          </button>
+        </div>
+      </div>
+      <p class="px-4 pt-3 text-xs text-muted-foreground">
+        Pairs run automatically on <b>ready</b> accounts only.
+        <b>no_video</b> = this Gmail's plan has no "Create video" (needs Google AI Pro/Ultra).
+        <b>signed_out</b> / <b>verify</b> = press <b>Sign in</b> (filled automatically when 🔑 a password is saved) and finish it in the window.
+      </p>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="text-xs text-muted-foreground">
+            <tr class="border-b border-border">
+              <th class="text-left font-normal px-4 py-2">Profile</th>
+              <th class="text-left font-normal px-4 py-2">Gmail</th>
+              <th class="text-left font-normal px-4 py-2">Status</th>
+              <th class="text-left font-normal px-4 py-2">Now</th>
+              <th class="text-left font-normal px-4 py-2">Checked</th>
+              <th class="text-left font-normal px-4 py-2">Note</th>
+              <th class="px-4 py-2"></th>
+            </tr>
+          </thead>
+          <tbody id="p-accounts"></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <!-- ─── ADD PAIR DIALOG ───────────────────────────────────────────────── -->
+  <div id="dlg-add" class="hidden fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="w-full max-w-lg rounded-xl border border-border bg-background shadow-xl">
+      <div class="flex items-center justify-between border-b border-border px-4 h-12">
+        <h3 class="font-medium">Add pair</h3>
+        <button data-close class="text-muted-foreground hover:text-foreground">✕</button>
+      </div>
+      <div class="p-4 space-y-3">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-xs text-muted-foreground">Images * (multi-select = 1 pair each)</label>
+            <input id="dlg-image-input" type="file" multiple accept=".png,.jpg,.jpeg,.webp,image/*"
+                   class="mt-1 block w-full text-xs file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-primary file:text-primary-foreground" />
+            <p id="dlg-image-name" class="text-xs text-muted-foreground mt-1 truncate"></p>
+          </div>
+          <div>
+            <label class="text-xs text-muted-foreground">Video (optional, applies to all)</label>
+            <input id="dlg-video-input" type="file" accept=".mp4,.mov,.webm,video/*"
+                   class="mt-1 block w-full text-xs file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-primary file:text-primary-foreground" />
+            <p id="dlg-video-name" class="text-xs text-muted-foreground mt-1 truncate"></p>
+          </div>
+        </div>
+        <div>
+          <label class="text-xs text-muted-foreground flex items-center justify-between">
+            <span>Prompt</span>
+            <label class="flex items-center gap-1.5">
+              <input id="dlg-use-default" type="checkbox" class="rounded" /> use default
+            </label>
+          </label>
+          <textarea id="dlg-prompt" rows="3" class="mt-1 w-full text-sm rounded-md border border-border bg-background p-2 ring-focus"></textarea>
+        </div>
+        <div class="grid grid-cols-2 gap-3 text-sm">
+          <p id="dlg-accounts-note" class="col-span-2 text-xs text-muted-foreground"></p>
+          <div>
+            <label class="text-xs text-muted-foreground">Video start (s)</label>
+            <input id="dlg-video-start" type="number" min="0" step="0.5" value="0" class="mt-1 w-full rounded-md border border-border bg-background px-2 py-1.5 ring-focus" />
+          </div>
+          <div>
+            <label class="text-xs text-muted-foreground">Timeout (s)</label>
+            <input id="dlg-timeout" type="number" min="60" step="30" value="600" class="mt-1 w-full rounded-md border border-border bg-background px-2 py-1.5 ring-focus" />
+          </div>
+        </div>
+      </div>
+      <div class="flex items-center justify-end gap-2 border-t border-border px-4 h-12">
+        <button data-close class="rounded-md border border-border px-3 h-8 text-sm hover:bg-muted ring-focus">Cancel</button>
+        <button id="dlg-save" class="rounded-md bg-primary text-primary-foreground px-3 h-8 text-sm font-medium hover:opacity-90 ring-focus">Add to queue</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const pairsEl = $("pairs");
+  const galleryEl = $("gallery-grid");
+  const detailEl = $("detail");
+  const galleryWrap = $("gallery");
+  const logEl = $("log");
+  const dlg = $("dlg-add");
+  const tabBtns = document.querySelectorAll(".tab-btn");
+
+  const state = {
+    pairs: [],
+    selectedId: null,
+    esByPair: {},
+    esByBatch: null,
+    filter: "all",
+    dialogUpload: { image: null, video: null },
+    useSystemDefault: localStorage.getItem("useSystemDefault") === "1",
+    // Visible Chrome windows by default: more reliable with Google than headless.
+    showBrowser: localStorage.getItem("showBrowser") !== "0",
+    view: "queue",
+  };
+
+  // ─── helpers ────────────────────────────────────────────────────────────
+  const STATUS_STYLE = {
+    queued: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
+    running: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 pulse",
+    done: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300",
+    failed: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
+  };
+  const basename = (p) => p ? p.split("/").pop() : "";
+  const esc = (t) => String(t ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  const fmtElapsed = (s) => s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, "0")}s`;
+
+  function badge(status) {
+    const cls = STATUS_STYLE[status] || STATUS_STYLE.queued;
+    return `<span class="text-[10px] px-1.5 py-0.5 rounded-full ${cls}">${status}</span>`;
+  }
+
+  // ─── system default prompt toggle ───────────────────────────────────────
+  const sysDefaultEl = $("use-system-default");
+  function applySystemDefault() {
+    sysDefaultEl.checked = state.useSystemDefault;
+    // Lock prompt inputs in the dialog (will be applied when dialog opens)
+    if (state.useSystemDefault) {
+      $("dlg-use-default").checked = true;
+      $("dlg-prompt").value = "";
+      $("dlg-prompt").disabled = true;
+      $("dlg-prompt").classList.add("opacity-50");
+    } else {
+      $("dlg-use-default").checked = false;
+      $("dlg-prompt").disabled = false;
+      $("dlg-prompt").classList.remove("opacity-50");
+    }
+  }
+  sysDefaultEl.addEventListener("change", () => {
+    state.useSystemDefault = sysDefaultEl.checked;
+    localStorage.setItem("useSystemDefault", state.useSystemDefault ? "1" : "0");
+    applySystemDefault();
+  });
+  applySystemDefault();
+
+  const showBrowserEl = $("show-browser");
+  showBrowserEl.checked = state.showBrowser;
+  showBrowserEl.addEventListener("change", () => {
+    state.showBrowser = showBrowserEl.checked;
+    localStorage.setItem("showBrowser", state.showBrowser ? "1" : "0");
+  });
+
+  async function api(path, opts = {}) {
+    const res = await fetch(path, opts);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || res.statusText);
+    return data;
+  }
+
+  // ─── refresh ────────────────────────────────────────────────────────────
+  async function refreshPairs() {
+    const data = await api("/api/pairs");
+    state.pairs = data.pairs;
+    renderCounts(data.counts);
+    renderPairs();
+    if (state.selectedId) {
+      const cur = state.pairs.find(p => p.id === state.selectedId);
+      if (cur) hydrateDetail(cur);
+    }
+  }
+
+  function renderCounts(c) {
+    $("c-queued").textContent = c.queued || 0;
+    $("c-running").textContent = c.running || 0;
+    $("c-done").textContent = c.done || 0;
+    $("c-failed").textContent = c.failed || 0;
+  }
+
+  function renderPairs() {
+    const list = state.filter === "all"
+      ? state.pairs
+      : state.pairs.filter(p => p.status === state.filter);
+    $("pairs-empty").classList.toggle("hidden", state.pairs.length > 0);
+    if (state.pairs.length > 0 && list.length === 0) {
+      pairsEl.innerHTML = `<p class="text-xs text-muted-foreground p-3">No pairs match "${state.filter}".</p>`;
+      return;
+    }
+    pairsEl.innerHTML = list.map(p => {
+      const sel = p.id === state.selectedId ? "ring-2 ring-primary" : "";
+      return `
+        <div data-id="${p.id}" class="pair-card group cursor-pointer rounded-lg border border-border bg-background p-2 ${sel} hover:bg-muted/60">
+          <div class="flex gap-2">
+            <img src="/uploads/${basename(p.image)}" class="w-16 h-16 object-cover rounded border border-border bg-muted" alt="" onerror="this.style.opacity=.3" />
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center justify-between gap-1">
+                <p class="text-xs font-medium truncate" title="${basename(p.image)}">${basename(p.image)}</p>
+                ${badge(p.status)}
+              </div>
+              <p class="text-[10px] text-muted-foreground truncate mt-0.5">${p.video ? "🎬 " + basename(p.video) : "no video"}</p>
+              <p class="text-[10px] text-muted-foreground truncate mt-0.5">${(p.prompt || "").slice(0, 60)}${(p.prompt || "").length > 60 ? "…" : ""}</p>
+              <p class="text-[10px] text-muted-foreground truncate mt-0.5">👤 ${p.mode === "attach" ? "attach" : (p.account || "auto")}${p.assigned_account && p.assigned_account !== p.account ? " → " + p.assigned_account : ""}</p>
+            </div>
+          </div>
+          <div class="flex items-center justify-end gap-1 mt-2">
+            ${p.status === "failed" || p.status === "done"
+              ? `<button data-act="retry" class="text-[10px] px-2 py-0.5 rounded border border-border hover:bg-muted">Retry</button>` : ""}
+            <button data-act="run" class="text-[10px] px-2 py-0.5 rounded bg-primary text-primary-foreground disabled:opacity-40" ${p.status === "running" ? "disabled" : ""}>Run</button>
+          </div>
+        </div>`;
+    }).join("");
+
+    pairsEl.querySelectorAll(".pair-card").forEach(card => {
+      const id = card.dataset.id;
+      card.addEventListener("click", (e) => {
+        const act = e.target.closest("[data-act]")?.dataset.act;
+        if (act === "run") return runOne(id, card);
+        if (act === "retry") return retryPair(id);
+        selectPair(id);
+      });
+    });
+  }
+
+  // ─── select / detail ────────────────────────────────────────────────────
+  function selectPair(id) {
+    state.selectedId = id;
+    detailEl.classList.remove("hidden");
+    galleryWrap.classList.add("hidden");
+    renderPairs();
+    const p = state.pairs.find(x => x.id === id);
+    if (p) hydrateDetail(p);
+    openStream(id);
+    switchTab("detail");
+  }
+
+  function hydrateDetail(p) {
+    $("d-img").src = "/uploads/" + basename(p.image);
+    if (p.video) {
+      $("d-video-wrap").classList.remove("hidden");
+      $("d-vid").src = "/uploads/" + basename(p.video);
+    } else {
+      $("d-video-wrap").classList.add("hidden");
+    }
+    $("d-prompt").value = p.prompt || "";
+    $("d-prompt").disabled = !!p.use_default_prompt;
+    $("d-use-default").checked = !!p.use_default_prompt;
+    $("d-account").textContent = (p.account && p.account !== "auto" ? p.account : "auto")
+      + (p.assigned_account ? ` → ran on ${p.assigned_account}` : "");
+    $("d-video-start").value = p.video_start || 0;
+    $("d-timeout").value = p.timeout || 600;
+    $("d-status-badge").className = "text-xs px-2 py-0.5 rounded-full " + (STATUS_STYLE[p.status] || "");
+    $("d-status-badge").textContent = p.status;
+    $("btn-retry").classList.toggle("hidden", !(p.status === "failed" || p.status === "done"));
+    if (p.output) {
+      $("d-output-wrap").classList.remove("hidden");
+      $("d-out").src = "/outputs/" + basename(p.output);
+      $("d-out-link").href = "/outputs/" + basename(p.output);
+      $("d-out-link").textContent = "Download " + basename(p.output);
+    } else {
+      $("d-output-wrap").classList.add("hidden");
+    }
+  }
+
+  tabBtns.forEach(btn => btn.addEventListener("click", () => switchTab(btn.dataset.tab)));
+  function switchTab(tab) {
+    tabBtns.forEach(b => {
+      const active = b.dataset.tab === tab;
+      b.classList.toggle("border-primary", active);
+      b.classList.toggle("text-foreground", active);
+      b.classList.toggle("border-transparent", !active);
+      b.classList.toggle("text-muted-foreground", !active);
+    });
+    $("log-body").classList.toggle("hidden", tab !== "log");
+    $("output-body").classList.toggle("hidden", tab !== "output");
+    if (tab === "output") $("output-body").textContent = "Generated video is shown in the right preview above.";
+  }
+
+  // ─── SSE ────────────────────────────────────────────────────────────────
+  function openStream(pairId) {
+    if (state.esByPair[pairId]) try { state.esByPair[pairId].close(); } catch {}
+    if (pairId !== state.selectedId) return;
+    const es = new EventSource(`/api/stream/${pairId}`);
+    state.esByPair[pairId] = es;
+    es.addEventListener("log", (e) => {
+      const line = JSON.parse(e.data);
+      logEl.textContent += line + "\n";
+      logEl.scrollTop = logEl.scrollHeight;
+    });
+    es.addEventListener("status", (e) => {
+      const s = JSON.parse(e.data);
+      const cur = state.pairs.find(p => p.id === pairId);
+      if (cur) {
+        cur.status = s.status;
+        cur.output = s.output || cur.output;
+      }
+      $("d-status-badge").className = "text-xs px-2 py-0.5 rounded-full " + (STATUS_STYLE[s.status] || "");
+      $("d-status-badge").textContent = s.status;
+      $("btn-retry").classList.toggle("hidden", !(s.status === "failed" || s.status === "done"));
+      if (s.output) {
+        $("d-output-wrap").classList.remove("hidden");
+        $("d-out").src = "/outputs/" + basename(s.output);
+        $("d-out-link").href = "/outputs/" + basename(s.output);
+      }
+      refreshPairs();
+      refreshOutputs();
+    });
+    es.addEventListener("end", () => { try { es.close(); } catch {} });
+    es.onerror = () => { /* browser auto-reconnects; ignore */ };
+  }
+
+  // ─── actions ────────────────────────────────────────────────────────────
+  async function runOne(pairId, card) {
+    try {
+      await api(`/api/pairs/${pairId}/run`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({headless: !state.showBrowser}) });
+      if (state.selectedId !== pairId) selectPair(pairId);
+    } catch (e) { alert(e.message); }
+  }
+  async function retryPair(pairId) {
+    try {
+      await api(`/api/pairs/${pairId}/retry`, { method: "POST" });
+      runOne(pairId);
+    } catch (e) { alert(e.message); }
+  }
+
+  $("btn-run-all").addEventListener("click", async () => {
+    const queued = state.pairs.filter(p => p.status === "queued").length;
+    if (queued === 0) { alert("No queued pairs."); return; }
+    if (!confirm(`Run ${queued} queued pair(s) across every signed-in account?\nAccounts are picked automatically; a few run at a time and the rest wait. Out-of-quota or verification-blocked accounts are skipped.`)) return;
+    try {
+      const data = await api("/api/run-all", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({headless: !state.showBrowser}) });
+      state.esByBatch?.close?.();
+      const es = new EventSource(`/api/stream/_batch:${data.batch_id}`);
+      state.esByBatch = es;
+      const el = $("slots-info");
+      es.addEventListener("batch", (e) => {
+        const obj = JSON.parse(e.data);
+        if (obj.event === "finished") {
+          el.classList.add("hidden");
+          es.close();
+          refreshPairs(); refreshOutputs();
+          if (obj.reason !== "queue empty") alert(`Run All stopped: ${obj.reason}`);
+          return;
+        }
+        if (obj.event === "scanning") { el.textContent = "🔍 scanning accounts…"; el.classList.remove("hidden"); return; }
+        const busy = obj.busy || [];
+        const blocked = Object.entries(obj.blocked || {}).map(([k, v]) => `${k} (${v.reason})`);
+        el.textContent = `⚡ running: ${busy.join(", ") || "—"}` + (blocked.length ? ` · blocked: ${blocked.join(", ")}` : "");
+        el.classList.remove("hidden");
+        if (obj.event === "job_started" || obj.event === "job_finished") { refreshPairs(); refreshOutputs(); }
+      });
+    } catch (e) { alert(e.message); }
+  });
+
+  $("btn-retry").addEventListener("click", () => state.selectedId && retryPair(state.selectedId));
+  $("btn-delete").addEventListener("click", async () => {
+    if (!state.selectedId) return;
+    if (!confirm("Delete this pair?")) return;
+    try {
+      await api(`/api/pairs/${state.selectedId}`, { method: "DELETE" });
+      state.selectedId = null;
+      detailEl.classList.add("hidden");
+      galleryWrap.classList.remove("hidden");
+      refreshPairs();
+    } catch (e) { alert(e.message); }
+  });
+
+  $("btn-save").addEventListener("click", async () => {
+    if (!state.selectedId) return;
+    const body = {
+      prompt: $("d-prompt").value,
+      use_default_prompt: $("d-use-default").checked,
+      video_start: parseFloat($("d-video-start").value || "0"),
+      timeout: parseInt($("d-timeout").value || "600", 10),
+    };
+    try {
+      await api(`/api/pairs/${state.selectedId}`, { method: "PATCH", headers: {"Content-Type":"application/json"}, body: JSON.stringify(body) });
+      refreshPairs();
+    } catch (e) { alert(e.message); }
+  });
+
+  $("btn-run").addEventListener("click", () => state.selectedId && runOne(state.selectedId));
+
+  // ─── dialog ────────────────────────────────────────────────────────────
+$("btn-demo").addEventListener("click", async () => {
+    if (!confirm("Create 3 sample pairs and Run All in parallel? (Old queued/failed pairs will be cleared.)")) return;
+    try {
+      const data = await api("/api/demo", { method: "POST" });
+      if (!data.ok) { alert(data.error || "demo failed"); return; }
+      refreshPairs();
+    } catch (e) { alert(e.message); }
+  });
+
+  $("btn-add").addEventListener("click", async () => {
+    dlg.classList.remove("hidden");
+    dlg.classList.add("flex");
+    state.dialogUpload = { images: [], video: null };
+    $("dlg-image-name").textContent = "";
+    $("dlg-video-name").textContent = "";
+    $("dlg-prompt").value = "";
+    if (state.useSystemDefault) {
+      $("dlg-use-default").checked = true;
+      $("dlg-prompt").disabled = true;
+      $("dlg-prompt").classList.add("opacity-50");
+    } else {
+      $("dlg-use-default").checked = false;
+      $("dlg-prompt").disabled = false;
+      $("dlg-prompt").classList.remove("opacity-50");
+    }
+    const accs = await refreshAccounts();
+    const ready = accs.filter(a => a.status === "ready").length;
+    $("dlg-accounts-note").textContent = ready
+      ? `Runs on whichever of the ${ready} signed-in account(s) is free — no need to pick one.`
+      : "No account that can create videos yet — open the Accounts tab and add one.";
+  });
+  dlg.querySelectorAll("[data-close]").forEach(b => b.addEventListener("click", () => {
+    dlg.classList.add("hidden"); dlg.classList.remove("flex");
+  }));
+
+  async function refreshAccounts() {
+    try { return (await api("/api/accounts")).accounts; } catch { return []; }
+  }
+
+  async function uploadAndStore(file, kind) {
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("kind", kind);
+    const res = await fetch("/api/upload", { method: "POST", body: fd });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+    return data.path;
+  }
+
+  $("dlg-image-input").addEventListener("change", async (e) => {
+    const files = Array.from(e.target.files); if (!files.length) return;
+    try {
+      state.dialogUpload.images = [];
+      for (const f of files) {
+        const p = await uploadAndStore(f, "image");
+        state.dialogUpload.images.push(p);
+      }
+      $("dlg-image-name").textContent = state.dialogUpload.images.length === 1
+        ? basename(state.dialogUpload.images[0])
+        : `${state.dialogUpload.images.length} images`;
+    } catch (e) { alert(e.message); }
+  });
+  $("dlg-video-input").addEventListener("change", async (e) => {
+    const f = e.target.files[0]; if (!f) return;
+    try { state.dialogUpload.video = await uploadAndStore(f, "video"); $("dlg-video-name").textContent = basename(state.dialogUpload.video); }
+    catch (e) { alert(e.message); }
+  });
+
+  $("dlg-save").addEventListener("click", async () => {
+    if (!state.dialogUpload.images.length) { alert("Upload at least one image."); return; }
+    const useDefault = $("dlg-use-default").checked;
+    if (!useDefault && !$("dlg-prompt").value.trim()) { alert("Prompt required (or enable default)."); return; }
+    const common = {
+      video: state.dialogUpload.video,
+      prompt: $("dlg-prompt").value,
+      use_default_prompt: state.useSystemDefault || useDefault,
+      video_start: parseFloat($("dlg-video-start").value || "0"),
+      timeout: parseInt($("dlg-timeout").value || "600", 10),
+      mode: "account",
+      account: "auto",
+    };
+    try {
+      let lastPair = null;
+      for (const img of state.dialogUpload.images) {
+        const data = await api("/api/pairs", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ ...common, image: img }) });
+        lastPair = data.pair;
+      }
+      dlg.classList.add("hidden"); dlg.classList.remove("flex");
+      if (lastPair) selectPair(lastPair.id);
+      refreshPairs();
+    } catch (e) { alert(e.message); }
+  });
+
+  // ─── filter buttons ─────────────────────────────────────────────────────
+  document.querySelectorAll(".filter-btn").forEach(b => {
+    b.addEventListener("click", () => {
+      state.filter = b.dataset.filter;
+      document.querySelectorAll(".filter-btn").forEach(x => x.classList.remove("bg-muted"));
+      b.classList.add("bg-muted");
+      renderPairs();
+    });
+  });
+
+  // ─── outputs gallery ────────────────────────────────────────────────────
+  async function refreshOutputs() {
+    const data = await api("/api/outputs");
+    if (!data.files.length) { galleryEl.innerHTML = `<p class="text-xs text-muted-foreground col-span-full">No videos yet.</p>`; return; }
+    galleryEl.innerHTML = data.files.map(f => `
+      <div class="rounded-md border border-border p-2 space-y-1">
+        <video src="${f.url}" controls class="w-full rounded"></video>
+        <p class="text-xs truncate" title="${f.name}">${f.name}</p>
+        <p class="text-[10px] text-muted-foreground">${(f.size/1024/1024).toFixed(2)} MB · ${f.mtime}</p>
+        <a href="${f.url}" download class="text-xs underline">Download</a>
+      </div>`).join("");
+  }
+
+  // ─── views + processes ──────────────────────────────────────────────────
+  const ACCOUNT_STYLE = {
+    ready: STATUS_STYLE.done,
+    verify: STATUS_STYLE.failed,
+    signed_out: STATUS_STYLE.queued,
+    no_video: STATUS_STYLE.failed,
+    error: STATUS_STYLE.failed,
+    unknown: "bg-muted text-muted-foreground",
+  };
+
+  document.querySelectorAll(".view-btn").forEach(b => b.addEventListener("click", () => switchView(b.dataset.view)));
+  function switchView(view) {
+    state.view = view;
+    document.querySelectorAll(".view-btn").forEach(b => {
+      b.classList.toggle("bg-muted", b.dataset.view === view);
+      b.classList.toggle("font-medium", b.dataset.view === view);
+    });
+    $("view-queue").classList.toggle("hidden", view !== "queue");
+    $("view-processes").classList.toggle("hidden", view !== "processes");
+    $("view-accounts").classList.toggle("hidden", view !== "accounts");
+    if (view !== "queue") refreshProcesses();
+  }
+
+  async function refreshProcesses() {
+    let data;
+    try { data = await api("/api/processes"); } catch { return; }
+    const n = data.jobs.length;
+    $("proc-count").textContent = n;
+    $("proc-count").classList.toggle("hidden", n === 0);
+    if (state.view === "accounts") return renderAccounts(data);
+    if (state.view !== "processes") return;
+
+    const d = data.dispatcher;
+    $("p-dispatcher").textContent = data.scanning && d.active ? "scanning accounts…" : d.active ? `running (${d.batch_id})` : "idle";
+    $("p-running").textContent = `${n} / ${d.active ? (d.max_parallel || "∞") : data.settings.max_parallel}`;
+    $("p-queued").textContent = data.queued;
+    const ready = data.accounts.filter(a => a.status === "ready" && !a.blocked).length;
+    $("p-ready").textContent = `${ready} / ${data.accounts.length}`;
+
+    $("p-jobs").innerHTML = n ? data.jobs.map(j => `
+      <tr class="border-b border-border last:border-0 align-top">
+        <td class="px-4 py-2"><div class="font-medium truncate max-w-[12rem]" title="${esc(j.image)}">${esc(j.image)}</div><div class="text-[10px] text-muted-foreground">${esc(j.pair_id)}${j.headless ? " · headless" : ""}</div></td>
+        <td class="px-4 py-2"><div>${esc(j.account)}</div><div class="text-[10px] text-muted-foreground">${esc(j.email || "")}</div></td>
+        <td class="px-4 py-2 text-xs">${esc(j.step || "starting…")}</td>
+        <td class="px-4 py-2 text-xs tabular-nums">${fmtElapsed(j.elapsed_s)}</td>
+        <td class="px-4 py-2 text-xs text-muted-foreground log-box max-w-[22rem] truncate" title="${esc(j.last_log)}">${esc(j.last_log || "")}</td>
+        <td class="px-4 py-2 whitespace-nowrap text-right">
+          <button data-open="${esc(j.pair_id)}" class="text-xs px-2 py-1 rounded border border-border hover:bg-muted ring-focus">Log</button>
+          <button data-stop="${esc(j.pair_id)}" class="text-xs px-2 py-1 rounded border border-border text-red-600 hover:bg-muted ring-focus">Stop</button>
+        </td>
+      </tr>`).join("")
+      : `<tr><td colspan="6" class="px-4 py-6 text-center text-xs text-muted-foreground">Nothing running.</td></tr>`;
+
+  }
+
+  function renderAccounts(data) {
+    $("p-scan-state").textContent = data.scanning ? "scanning…" : "";
+    $("btn-scan").disabled = data.scanning;
+    const btn = (act, name, label, extra = "") =>
+      `<button data-acc-act="${act}" data-name="${esc(name)}" class="text-xs px-2 py-1 rounded border border-border hover:bg-muted disabled:opacity-40 ring-focus ${extra}">${label}</button>`;
+    $("p-accounts").innerHTML = data.accounts.map(a => {
+      const logging = a.login && a.login.state === "waiting";
+      const now = logging ? `<span class="text-[10px] px-1.5 py-0.5 rounded-full ${STATUS_STYLE.running}">signing in…</span>`
+        : a.busy ? `<span class="text-[10px] px-1.5 py-0.5 rounded-full ${STATUS_STYLE.running}">busy</span>`
+        : a.blocked ? `<span class="text-[10px] px-1.5 py-0.5 rounded-full ${STATUS_STYLE.failed}">${esc(a.blocked.reason)}${a.blocked.until ? " until " + esc(a.blocked.until.slice(11)) : ""}</span>`
+        : `<span class="text-[10px] text-muted-foreground">idle</span>`;
+      const note = logging ? (a.login.message || "Finish signing in in the Chrome window") : (a.message || (a.login && a.login.state !== "done" ? `login ${a.login.state}: ${a.login.message || ""}` : ""));
+      const actions = logging
+        ? btn("cancel", a.name, "Cancel sign-in")
+        : [btn("login", a.name, "Sign in"), btn("scan", a.name, "Check"),
+           a.has_password ? btn("forget", a.name, "Forget password") : "",
+           btn("delete", a.name, "Delete", "text-red-600")].join(" ");
+      return `
+      <tr class="border-b border-border last:border-0">
+        <td class="px-4 py-2 font-medium">${esc(a.name)}</td>
+        <td class="px-4 py-2 text-xs">${esc(a.email || "—")}${a.has_password ? ' <span title="Password saved in Keychain — signs in automatically">🔑</span>' : ""}</td>
+        <td class="px-4 py-2"><span class="text-[10px] px-1.5 py-0.5 rounded-full ${ACCOUNT_STYLE[a.status] || ACCOUNT_STYLE.unknown}">${esc(a.status)}</span></td>
+        <td class="px-4 py-2">${now}</td>
+        <td class="px-4 py-2 text-xs text-muted-foreground">${esc((a.checked_at || "").replace("T", " "))}</td>
+        <td class="px-4 py-2 text-xs text-muted-foreground max-w-[18rem] truncate" title="${esc(note)}">${esc(note)}</td>
+        <td class="px-4 py-2 whitespace-nowrap text-right" ${a.busy ? 'title="Running a job"' : ""}>${a.busy ? "" : actions}</td>
+      </tr>`;
+    }).join("") || `<tr><td colspan="7" class="px-4 py-6 text-center text-xs text-muted-foreground">No accounts yet — add one above.</td></tr>`;
+  }
+
+  $("p-accounts").addEventListener("click", async (e) => {
+    const b = e.target.closest("[data-acc-act]");
+    if (!b) return;
+    const name = b.dataset.name, act = b.dataset.accAct;
+    const enc = encodeURIComponent(name);
+    try {
+      if (act === "delete") {
+        if (!confirm(`Delete profile "${name}"? The tool signs out of it (your Google account itself is not touched).`)) return;
+        await api(`/api/accounts/${enc}`, { method: "DELETE" });
+      } else if (act === "login") {
+        await api(`/api/accounts/${enc}/login`, { method: "POST" });
+      } else if (act === "forget") {
+        if (!confirm(`Remove the saved password of "${name}" from the Keychain? The profile stays signed in.`)) return;
+        await api(`/api/accounts/${enc}/password`, { method: "DELETE" });
+      } else if (act === "cancel") {
+        await api(`/api/accounts/${enc}/login/cancel`, { method: "POST" });
+      } else if (act === "scan") {
+        await api(`/api/accounts/${enc}/scan`, { method: "POST" });
+      }
+      refreshProcesses();
+    } catch (err) { alert(err.message); }
+  });
+
+  $("acc-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const input = $("acc-name"), emailEl = $("acc-email"), pwEl = $("acc-password"), totpEl = $("acc-totp"), errEl = $("acc-form-error");
+    errEl.classList.add("hidden");
+    try {
+      await api("/api/accounts", { method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ name: input.value.trim(), email: emailEl.value.trim(), password: pwEl.value, totp: totpEl.value.trim() }) });
+      input.value = ""; emailEl.value = ""; pwEl.value = ""; totpEl.value = "";
+      refreshProcesses();
+    } catch (err) { errEl.textContent = err.message; errEl.classList.remove("hidden"); }
+  });
+
+  $("p-jobs").addEventListener("click", async (e) => {
+    const stop = e.target.closest("[data-stop]")?.dataset.stop;
+    const open = e.target.closest("[data-open]")?.dataset.open;
+    if (stop) {
+      if (!confirm("Stop this job? Its browser is closed and the pair is marked failed.")) return;
+      try { await api(`/api/pairs/${stop}/stop`, { method: "POST" }); refreshProcesses(); refreshPairs(); }
+      catch (err) { alert(err.message); }
+    } else if (open) {
+      switchView("queue");
+      logEl.textContent = "";
+      selectPair(open);
+      switchTab("log");
+    }
+  });
+
+  $("btn-scan").addEventListener("click", async () => {
+    try { await api("/api/accounts/scan", { method: "POST" }); refreshProcesses(); }
+    catch (err) { alert(err.message); }
+  });
+
+  // ─── boot ───────────────────────────────────────────────────────────────
+  refreshPairs();
+  refreshOutputs();
+  setInterval(refreshPairs, 5000);
+  setInterval(refreshOutputs, 8000);
+  refreshProcesses();
+  setInterval(refreshProcesses, 2000);
+})();
+</script>
+</body>
+</html>

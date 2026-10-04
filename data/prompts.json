@@ -1,0 +1,94 @@
+[
+  {
+    "id": "pr_99f8d46f",
+    "name": "Nhảy – theo video mẫu",
+    "category": "dance",
+    "content": "Create a realistic full-body dance video using the provided reference image as the primary visual source.\nIMPORTANT: Preserve the exact identity and appearance of the person from the reference image.\nFACE AND IDENTITY:\n\nKeep the exact same face, facial structure, eyes, nose, lips, skin tone and hairstyle.\nDo not redesign, beautify, replace or reinterpret the face.\nThe person's identity must remain consistent throughout the entire video.\nNo face morphing, no face swapping, no identity change.\nFacial features must remain stable during movement and camera motion.\nBODY AND CLOTHING:\n\nPreserve the person's body proportions, physique, clothing, colors, shoes and accessories from the reference image.\nDo not change or redesign the outfit.\nDo not add or remove accessories.\nKeep the same person throughout the entire video.\nBACKGROUND AND ENVIRONMENT:\n\nPreserve the original background, location, architecture, objects, colors, lighting and overall environment from the reference image.\nDo not replace the background with a different environment.\nDo not generate a new location.\nDo not add unnecessary objects or people.\nThe background should remain visually consistent throughout the video.\nACTION:\n\nAnimate the person performing a natural, energetic dance.\nKeep the person's appearance unchanged while allowing realistic body movement.\nFull-body dancing with both feet and the entire body visible.\nNatural human anatomy and realistic motion.\nRealistic hands, fingers, arms and legs.\nCAMERA:\n\nKeep the camera relatively stable.\nUse subtle cinematic camera movement only.\nDo not excessively zoom in on the face.\nKeep the person fully visible for most of the video.\nVISUAL CONSISTENCY:\nThe reference image is the source of truth for the person's identity, appearance, clothing and environment.\nDo not reinterpret the reference image.\nDo not change the person, face, outfit or location.\nQUALITY:\nPhotorealistic video, natural skin texture, realistic human motion, consistent lighting, realistic physics, detailed face and hands.\nAvoid:\nface distortion, identity change, different person, different hairstyle, different clothes, different background, new location, extra people, extra limbs, missing limbs, deformed hands, duplicated body parts, unnatural anatomy, background replacement, flickering objects, sudden scene changes.",
+    "inputs": {
+      "model_image": true,
+      "product_image": false,
+      "ref_video": true
+    },
+    "created_at": "2026-10-03T13:25:57",
+    "updated_at": "2026-10-03T13:25:57"
+  },
+  {
+    "id": "pr_7ae8e8db",
+    "name": "Quần áo – người mẫu trình diễn",
+    "category": "clothes",
+    "content": "Create a fashion advertisement video for the outfit \"{{product_name}}\".\nThe person in the provided image is the model; keep the exact same face, hairstyle, body and outfit.\nThe outfit must look EXACTLY like in the image: same cut, fabric, colors, patterns and details.\nACTION: the model walks toward the camera like on a runway, turns slowly, poses to show the outfit,\ntouches the fabric lightly to show its texture.\nCAMERA: full-body shot, smooth tracking, ends with a medium shot highlighting the outfit details.\nSCENE: clean bright studio with soft light, minimal background.\nQUALITY:\nPhotorealistic commercial video, natural lighting, realistic physics, sharp product details.\nAvoid: distorted product, wrong logo or text, changed colors, extra limbs, deformed hands,\nduplicated objects, flickering, sudden scene changes, watermarks, on-screen text.",
+    "inputs": {
+      "model_image": true,
+      "product_image": false,
+      "ref_video": false
+    },
+    "created_at": "2026-10-03T13:25:57",
+    "updated_at": "2026-10-03T13:25:57"
+  },
+  {
+    "id": "pr_5b631183",
+    "name": "Túi xách – người mẫu cầm túi",
+    "category": "bag",
+    "content": "Create a luxury handbag advertisement video for \"{{product_name}}\".\nThe person in the FIRST image is the model; keep the exact same face, hairstyle, body and clothes.\nThe handbag in the SECOND image is the product; it must look EXACTLY the same: shape, size, color,\nmaterial, logo, stitching and metal hardware.\nACTION: the model walks confidently on a city street holding the handbag, stops, lifts the bag\nslightly and smiles.\nCAMERA: medium shot following the model, ends with a slow push-in close-up on the handbag.\nQUALITY:\nPhotorealistic commercial video, natural lighting, realistic physics, sharp product details.\nAvoid: distorted product, wrong logo or text, changed colors, extra limbs, deformed hands,\nduplicated objects, flickering, sudden scene changes, watermarks, on-screen text.",
+    "inputs": {
+      "model_image": true,
+      "product_image": true,
+      "ref_video": false
+    },
+    "created_at": "2026-10-03T13:25:57",
+    "updated_at": "2026-10-03T13:25:57"
+  },
+  {
+    "id": "pr_3b52fee5",
+    "name": "Túi xách – xoay 360° studio",
+    "category": "bag",
+    "content": "Create a product showcase video for the handbag \"{{product_name}}\".\nThe handbag in the provided image is the product; it must look EXACTLY the same: shape, color,\nmaterial, logo, stitching and hardware. No people.\nACTION: the handbag slowly rotates 360 degrees on a round pedestal.\nSCENE: premium studio, soft gradient background, gentle rim light, subtle reflections on the floor.\nCAMERA: static, slight slow push-in at the end on the logo and texture.\nQUALITY:\nPhotorealistic commercial video, natural lighting, realistic physics, sharp product details.\nAvoid: distorted product, wrong logo or text, changed colors, extra limbs, deformed hands,\nduplicated objects, flickering, sudden scene changes, watermarks, on-screen text.",
+    "inputs": {
+      "model_image": false,
+      "product_image": true,
+      "ref_video": false
+    },
+    "created_at": "2026-10-03T13:25:57",
+    "updated_at": "2026-10-03T13:25:57"
+  },
+  {
+    "id": "pr_7ecc6b52",
+    "name": "Mỹ phẩm – cận cảnh sản phẩm",
+    "category": "cosmetics",
+    "content": "Create a premium cosmetics advertisement video for \"{{product_name}}\".\nThe product in the provided image must look EXACTLY the same: packaging shape, color, label text and logo.\nNo people.\nACTION: the product stands on a wet glossy surface, water droplets and soft petals fall around it,\na gentle splash of water, light reflections glide across the packaging.\nCAMERA: macro close-up, slow orbit around the product, ends front-facing on the label.\nSCENE: elegant pastel background, soft diffused lighting.\nQUALITY:\nPhotorealistic commercial video, natural lighting, realistic physics, sharp product details.\nAvoid: distorted product, wrong logo or text, changed colors, extra limbs, deformed hands,\nduplicated objects, flickering, sudden scene changes, watermarks, on-screen text.",
+    "inputs": {
+      "model_image": false,
+      "product_image": true,
+      "ref_video": false
+    },
+    "created_at": "2026-10-03T13:25:57",
+    "updated_at": "2026-10-03T13:25:57"
+  },
+  {
+    "id": "pr_12a33bfa",
+    "name": "Giày – cận cảnh bước đi",
+    "category": "shoes",
+    "content": "Create a footwear advertisement video for \"{{product_name}}\".\nThe person in the FIRST image is the model; keep the same face, body and clothes.\nThe shoes in the SECOND image are the product; they must look EXACTLY the same: shape, colors,\nsole, laces and logo.\nACTION: the model wears the shoes and walks on a clean urban sidewalk, steps over a small puddle.\nCAMERA: starts with a low-angle close-up on the shoes while walking, then tilts up to a full-body shot.\nQUALITY:\nPhotorealistic commercial video, natural lighting, realistic physics, sharp product details.\nAvoid: distorted product, wrong logo or text, changed colors, extra limbs, deformed hands,\nduplicated objects, flickering, sudden scene changes, watermarks, on-screen text.",
+    "inputs": {
+      "model_image": true,
+      "product_image": true,
+      "ref_video": false
+    },
+    "created_at": "2026-10-03T13:25:57",
+    "updated_at": "2026-10-03T13:25:57"
+  },
+  {
+    "id": "pr_c8e82591",
+    "name": "túi xách",
+    "content": "Create a premium fashion commercial video using the provided female model image as the character reference and the provided white HAPAS handbag image as the exact product reference.\nCharacter consistency: Keep the same woman's facial identity, hairstyle, body proportions, skin tone, and overall appearance throughout the entire video. Do not change her face between shots.\nProduct consistency: The handbag must remain exactly consistent with the reference image: elegant white structured rectangular handbag, white top handles, detachable white shoulder strap, gold metal hardware, hanging HAPAS tag and gold HAPAS logo. Do not alter the bag's shape, proportions, color, handles, logo, accessories, stitching, or hardware.\nChange the model's original casual outfit into an elegant outfit that matches the white luxury handbag: a sophisticated feminine look in ivory, cream, beige, champagne or soft neutral tones. Use a fitted elegant sleeveless top or blouse combined with a flowing midi skirt or tailored high-waisted trousers, minimal gold jewelry, and elegant neutral heels. The styling should feel modern, clean, luxurious and suitable for a premium handbag advertisement.\nChange the background into a refined fashion-show environment that complements the handbag: a luxurious minimalist cream and beige studio with soft architectural curves, warm diffused lighting, subtle shadows, polished light floor, and an elegant runway atmosphere. Keep the background uncluttered so the white handbag remains the visual focus.\nScene 1 – Introduction: Full-body shot. The woman stands elegantly in the center of the scene while holding the handbag naturally at her side. She looks toward the camera and gives a warm, confident, natural smile. Her posture is graceful and relaxed. Slow cinematic camera push-in.\nScene 2 – Product presentation: The woman gently raises the handbag to approximately chest height and presents it toward the camera. She smiles while slowly and delicately swaying the handbag from side to side two or three times. The movement must be smooth, controlled and elegant, allowing the viewer to clearly see the handbag's front design, handles, gold hardware and HAPAS details. The bag should maintain realistic weight, gravity and structure.\nScene 3 – Close-up product reveal: The woman slowly brings the handbag closer toward the camera until the handbag becomes the main focus of the frame. Use a smooth cinematic push-in and shallow depth of field. Clearly showcase the white leather texture, stitching, gold hardware, HAPAS logo and hanging tag. Her face remains visible softly in the background with a pleasant smile. No distortion of the handbag as it approaches the lens.\nScene 4 – Fashion transition: Smooth elegant transition into a wider runway environment. The woman lowers the handbag naturally, holds it gracefully by the top handle or carries it on one arm, turns slightly, and prepares to walk.\nScene 5 – Catwalk finale: The woman confidently performs a slow luxury-fashion catwalk toward the camera while carrying the handbag. Natural arm movement, elegant posture, subtle hip movement, confident soft smile. Alternate between a full-body frontal shot, three-quarter angle, medium shot highlighting the handbag, and a brief side angle. The handbag moves naturally with her steps without excessive swinging.\nFinish with the model stopping elegantly near the camera, slightly turning her body to present the handbag, smiling confidently while the handbag is clearly visible as the hero product.\nVisual style: premium handbag commercial, luxury fashion campaign, sophisticated feminine aesthetic, clean Korean fashion advertisement style, realistic photography, high-end studio cinematography, soft warm lighting, smooth camera movement, natural skin texture, realistic fabric physics, realistic handbag physics, shallow depth of field, subtle cinematic bokeh, polished commercial look, 4K, highly detailed.\nCamera: smooth dolly movement, slow push-in, medium and full-body framing, product close-up, gentle tracking shot during catwalk, stable professional camera, no sudden zoom or shaky movement.\nMovement: elegant, slow, graceful, realistic and commercially polished. Avoid exaggerated gestures.\nImportant: preserve the woman's identity and preserve the exact handbag design from the reference images throughout every frame.\n\nNegative prompt\nDo not change the woman's face, identity, age, hairstyle or body proportions. No face morphing, no different person, no extra fingers, no deformed hands, no duplicated limbs, no unnatural walking, no robotic movements. Do not redesign the handbag, do not change its white color, logo, HAPAS lettering, hanging tag, handles, shoulder strap, gold hardware, size or proportions. No warped handbag, no melting leather, no disappearing handles, no duplicated bag, no floating bag, no incorrect logo or random text. Avoid excessive bag swinging, excessive body movement, camera shake, sudden cuts, flickering, background distortion, low resolution, cartoon look or artificial plastic skin.",
+    "category": "clothes",
+    "inputs": {
+      "model_image": true,
+      "product_image": true,
+      "ref_video": false
+    },
+    "use_rules": true,
+    "created_at": "2026-10-04T12:00:03",
+    "updated_at": "2026-10-04T12:00:46"
+  }
+]

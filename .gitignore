@@ -1,0 +1,17 @@
+accounts/*
+!accounts/.gitkeep
+
+screenshots/*
+!screenshots/.gitkeep
+
+output/*
+!output/.gitkeep
+
+.env
+*.log
+
+.venv/
+__pycache__/
+*.pyc
+
+web/node_modules/
