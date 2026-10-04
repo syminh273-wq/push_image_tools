@@ -10,6 +10,7 @@ import { PromptsPage } from "@/pages/prompts"
 import { QueuePage } from "@/pages/queue"
 import { RunningPage } from "@/pages/running"
 import { SettingsPage } from "@/pages/settings"
+import { TikTokPage } from "@/pages/tiktok"
 
 const PAGES: Record<Page, { title: string; render: () => React.ReactNode }> = {
   create: { title: "Tạo video quảng cáo", render: () => <CreateVideoPage /> },
@@ -20,6 +21,7 @@ const PAGES: Record<Page, { title: string; render: () => React.ReactNode }> = {
   models: { title: "Thư viện Model", render: () => <ModelsPage /> },
   accounts: { title: "Tài khoản", render: () => <AccountsPage /> },
   settings: { title: "Cài đặt", render: () => <SettingsPage /> },
+  tiktok: { title: "TikTok manager", render: () => <TikTokPage /> },
 }
 
 export default function App() {

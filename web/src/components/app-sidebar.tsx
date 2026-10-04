@@ -8,6 +8,7 @@ import {
   SparklesIcon,
   UserCircleIcon,
   UsersIcon,
+  VideoIcon,
   type LucideIcon,
 } from "lucide-react"
 
@@ -53,6 +54,7 @@ export function AppSidebar() {
         { page: "models", label: "Thư viện Model", icon: UserCircleIcon },
         { page: "accounts", label: "Tài khoản", icon: UsersIcon },
         { page: "settings", label: "Cài đặt", icon: CogIcon },
+        { page: "tiktok", label: "TikTok manager", icon: VideoIcon },
       ],
     },
   ]

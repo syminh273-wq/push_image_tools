@@ -1,8 +1,8 @@
 import { useSyncExternalStore } from "react"
 
-export type Page = "create" | "queue" | "running" | "gallery" | "prompts" | "models" | "accounts" | "settings"
+export type Page = "create" | "queue" | "running" | "gallery" | "prompts" | "models" | "accounts" | "settings" | "tiktok"
 
-const PAGES: Page[] = ["create", "queue", "running", "gallery", "prompts", "models", "accounts", "settings"]
+const PAGES: Page[] = ["create", "queue", "running", "gallery", "prompts", "models", "accounts", "settings", "tiktok"]
 
 function subscribe(cb: () => void) {
   window.addEventListener("hashchange", cb)

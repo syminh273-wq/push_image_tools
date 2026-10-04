@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import {
   flexRender,
   getCoreRowModel,
@@ -26,11 +26,16 @@ import type { Pair, PairStatus } from "@/lib/api"
 import { STATUS_LABEL, fmtTime, uploadUrl } from "@/lib/format"
 
 export function QueuePage() {
-  const { pairs, counts, models, runPair } = useAppData()
+  const { pairs, counts, models, runPair, refreshPairs, refreshProcesses } = useAppData()
   const { params } = useRoute()
   const openId = params.get("pair")
   const [status, setStatus] = useState<"all" | PairStatus>("all")
   const [search, setSearch] = useState("")
+
+  useEffect(() => {
+    refreshPairs().catch(() => {})
+    refreshProcesses().catch(() => {})
+  }, [refreshPairs, refreshProcesses])
 
   const columns = useMemo<ColumnDef<Pair>[]>(
     () => [

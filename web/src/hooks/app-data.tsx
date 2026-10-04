@@ -44,21 +44,6 @@ const Ctx = createContext<AppData | null>(null)
 
 const EMPTY_COUNTS: Counts = { queued: 0, running: 0, done: 0, failed: 0 }
 
-function usePoll(fn: () => Promise<void>, ms: number) {
-  const ref = useRef(fn)
-  ref.current = fn
-  useEffect(() => {
-    let alive = true
-    const tick = () => alive && ref.current().catch(() => {})
-    tick()
-    const t = setInterval(tick, ms)
-    return () => {
-      alive = false
-      clearInterval(t)
-    }
-  }, [ms])
-}
-
 export function AppDataProvider({ children }: { children: ReactNode }) {
   const [pairs, setPairs] = useState<Pair[] | null>(null)
   const [counts, setCounts] = useState<Counts>(EMPTY_COUNTS)
@@ -87,14 +72,17 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     setModels((await api<{ models: ModelImage[] }>("/api/models")).models)
   }, [])
 
-  usePoll(refreshPairs, 3000)
-  usePoll(refreshProcesses, 2000)
-  usePoll(refreshOutputs, 8000)
+  // Initial load only. After this, components must call refresh*() explicitly
+  // (on mount, button click, route change, etc.). No background polling.
   useEffect(() => {
+    console.info("[app-data] initial load (no-polling build v2)")
+    refreshPairs().catch((e) => toast.error(e.message))
+    refreshProcesses().catch((e) => toast.error(e.message))
+    refreshOutputs().catch((e) => toast.error(e.message))
     refreshPrompts().catch((e) => toast.error(e.message))
     refreshRules().catch((e) => toast.error(e.message))
     refreshModels().catch((e) => toast.error(e.message))
-  }, [refreshPrompts, refreshRules, refreshModels])
+  }, [refreshPairs, refreshProcesses, refreshOutputs, refreshPrompts, refreshRules, refreshModels])
 
   const setSettings = useCallback((s: RunSettings) => {
     setSettingsState(s)
@@ -140,7 +128,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => () => batchStream.current?.close(), [])
 
-const value = useMemo(
+  const value = useMemo(
     () => ({
       pairs, counts, processes, prompts, rules, outputs, models, settings, setSettings,
       refreshPairs, refreshProcesses, refreshPrompts, refreshRules, refreshOutputs, refreshModels, runPair, runAll,

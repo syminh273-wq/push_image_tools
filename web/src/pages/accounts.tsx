@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { flexRender, getCoreRowModel, useReactTable, type ColumnDef } from "@tanstack/react-table"
 import {
@@ -65,6 +65,10 @@ export function AccountsPage() {
   const { processes, refreshProcesses } = useAppData()
   const [adding, setAdding] = useState(false)
   const [confirm, setConfirm] = useState<Confirm | null>(null)
+
+  useEffect(() => {
+    refreshProcesses().catch(() => {})
+  }, [refreshProcesses])
 
   async function act(path: string, method: string, ok: string) {
     try {

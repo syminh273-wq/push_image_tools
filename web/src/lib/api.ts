@@ -96,6 +96,28 @@ export type OutputFile = {
   category: Category | null
 }
 
+export type TikTokTabState = {
+  is_running: boolean
+  comments_sent: number
+  comments_failed: number
+  current_video: string | null
+  last_comment: string | null
+  last_error: string | null
+  started_at: string | null
+  stopped_at: string | null
+}
+
+export type TikTokTab = {
+  uid: string
+  url: string
+  title: string
+  active: boolean
+  logged_in: boolean
+  state: TikTokTabState
+}
+
+export type TikTokTabsResponse = { ok: boolean; tabs: TikTokTab[] }
+
 export type ModelImage = {
   id: string
   name: string

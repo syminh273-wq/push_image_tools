@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { DownloadIcon, FilmIcon, SparklesIcon } from "lucide-react"
 
 import { EmptyState } from "@/components/empty-state"
@@ -14,9 +14,13 @@ import type { Category, OutputFile } from "@/lib/api"
 import { CATEGORIES, categoryOf, fmtSize, fmtTime } from "@/lib/format"
 
 export function GalleryPage() {
-  const { outputs } = useAppData()
+  const { outputs, refreshOutputs } = useAppData()
   const [filter, setFilter] = useState<"all" | Category>("all")
   const [open, setOpen] = useState<OutputFile | null>(null)
+
+  useEffect(() => {
+    refreshOutputs().catch(() => {})
+  }, [refreshOutputs])
 
   if (!outputs) {
     return (

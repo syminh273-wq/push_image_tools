@@ -20,7 +20,7 @@ import sys
 if sys_path not in sys.path:
     sys.path.insert(0, sys_path)
 
-from app import accounts, credentials, models_store, prompt_store, runner, store  # noqa: E402
+from app import accounts, credentials, models_store, prompt_store, runner, store, tabs, tiktok_runner  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 log = logging.getLogger("gemini_video_tool.web")
@@ -43,6 +43,53 @@ WEB_DIST = PROJECT_ROOT / "web" / "dist"
 
 app = Flask(__name__, static_folder=None)
 app.config["MAX_CONTENT_LENGTH"] = 500 * 1024 * 1024  # 500 MB
+
+
+# A single asyncio loop for the whole app, owned by a daemon thread. Flask handlers
+# run in worker threads; they must NOT call asyncio.new_event_loop() because
+# `tabs.ChromeConnector` and other async resources are bound to the loop where they
+# were first awaited, which causes subsequent requests to deadlock on
+# asyncio.Lock / connect_over_cdp. Use _run_async() instead.
+_async_loop: asyncio.AbstractEventLoop | None = None
+_async_thread: threading.Thread | None = None
+
+
+def _ensure_async_loop() -> asyncio.AbstractEventLoop:
+    global _async_loop, _async_thread
+    if _async_loop is not None and _async_thread is not None and _async_thread.is_alive():
+        return _async_loop
+    loop = asyncio.new_event_loop()
+
+    def _runner() -> None:
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_forever()
+        finally:
+            loop.close()
+
+    t = threading.Thread(target=_runner, daemon=True, name="asyncio-shared")
+    t.start()
+    _async_loop = loop
+    _async_thread = t
+    return loop
+
+
+def _run_async(coro, *, timeout: float = 30.0):
+    """Submit a coroutine to the shared loop from any thread and wait for the result.
+
+    Flask threads block on this — that's fine for short async calls (CDP scans, page
+    lookups). For long-running work the caller should hand the coroutine to a background
+    task via _submit_async() so the HTTP response returns immediately.
+    """
+    loop = _ensure_async_loop()
+    future = asyncio.run_coroutine_threadsafe(coro, loop)
+    return future.result(timeout=timeout)
+
+
+def _submit_async(coro) -> None:
+    """Fire-and-forget: schedule a coroutine on the shared loop without waiting."""
+    loop = _ensure_async_loop()
+    asyncio.run_coroutine_threadsafe(coro, loop)
 
 # Per-pair log queue: pair_id -> queue.Queue of new lines (consumed by SSE).
 _pair_log_q: dict[str, queue.Queue] = {}
@@ -928,6 +975,258 @@ def _dispatch_loop(batch_id: str, headless: bool, delay: float) -> None:
         counts[p["status"]] = counts.get(p["status"], 0) + 1
     log.info("batch %s finished: %s %s", batch_id, stop_reason, counts)
     emit("finished", reason=stop_reason, counts=counts)
+
+
+# ---------------------------------------------------------------------------
+# TikTok manager: scan the user's Chrome over CDP and run an auto-comment bot
+# on a tab they already have open and signed into TikTok.
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/tiktok/tabs")
+def list_tiktok_tabs():
+    """List every Chrome tab whose URL is on tiktok.com, with login + active flag and
+    the current per-tab run state (counters from the in-memory registry)."""
+    import concurrent.futures
+    try:
+        tabs_list = _run_async(tabs.scan_tiktok_tabs(), timeout=30.0)
+    except concurrent.futures.TimeoutError:
+        log.warning("scan_tiktok_tabs: CDP scan timed out after 30s")
+        tabs_list = []
+    except Exception as e:
+        # Don't crash the UI on a transient CDP hiccup — return an empty list so
+        # the user can at least see their existing runner state.
+        log.warning("scan_tiktok_tabs failed: %r", e)
+        tabs_list = []
+    for t in tabs_list:
+        state = tiktok_runner.get_state(t["uid"]) or {}
+        t["state"] = {
+            "is_running": state.get("is_running", False),
+            "comments_sent": state.get("comments_sent", 0),
+            "comments_failed": state.get("comments_failed", 0),
+            "current_video": state.get("current_video"),
+            "last_comment": state.get("last_comment"),
+            "last_error": state.get("last_error"),
+            "started_at": state.get("started_at"),
+            "stopped_at": state.get("stopped_at"),
+        }
+    return jsonify({"ok": True, "tabs": tabs_list})
+
+
+@app.post("/api/tiktok/scan")
+def rescan_tiktok_tabs():
+    """Force a CDP reconnect and a fresh tab scan. Used when the user opens a new tab
+    while the UI is open."""
+    try:
+        tabs_list = _run_async(tabs.scan_tiktok_tabs(), timeout=15.0)
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+    return jsonify({"ok": True, "count": len(tabs_list)})
+
+
+@app.post("/api/tiktok/headless-login")
+def headless_login():
+    """Open a *visible* window using the headless profile so the user can sign in
+    to TikTok once. The session is saved to accounts/tiktok_headless/ and every
+    subsequent run with headless=true reuses it without showing a window."""
+    import asyncio, threading
+    result_holder = {}
+    error_holder = {}
+
+    def target():
+        try:
+            result_holder["data"] = asyncio.run(
+                tiktok_runner.login_tiktok_headless())
+        except Exception as e:
+            error_holder["error"] = e
+
+    t = threading.Thread(target=target, daemon=True)
+    t.start()
+    t.join(timeout=10)
+    if error_holder:
+        return jsonify({"ok": False, "error": str(error_holder["error"])}), 500
+    data = result_holder.get("data", {})
+    return jsonify({"ok": True, "message": data.get("message"),
+                    "profile": data.get("profile"),
+                    "page_url": data.get("page_url")})
+
+
+@app.post("/api/tiktok/login-profile/<profile_name>")
+def login_profile(profile_name: str):
+    """Open a visible Chrome using a specific account profile so the user can
+    sign in to TikTok. The session is saved to that profile's Cookies file."""
+    import asyncio, threading
+    result_holder = {}
+    error_holder = {}
+
+    def target():
+        try:
+            result_holder["data"] = asyncio.run(
+                tiktok_runner.login_tiktok_profile(profile_name))
+        except Exception as e:
+            error_holder["error"] = e
+
+    t = threading.Thread(target=target, daemon=True)
+    t.start()
+    t.join(timeout=10)
+    if error_holder:
+        return jsonify({"ok": False, "error": str(error_holder["error"])}), 500
+    data = result_holder.get("data", {})
+    return jsonify({"ok": True, "message": data.get("message"),
+                    "profile": data.get("profile"),
+                    "page_url": data.get("page_url")})
+
+
+@app.get("/api/tiktok/profiles")
+def list_tiktok_profiles():
+    """List every account profile under accounts/ that has TikTok cookies,
+    so the UI can show a 'login from another account' picker."""
+    try:
+        profiles = _run_async(tabs.scan_account_profiles(), timeout=5.0)
+    except Exception:
+        profiles = []
+    return jsonify({"ok": True, "profiles": [
+        {"name": p["profile_name"], "uid": p["uid"], "title": p["title"]}
+        for p in profiles
+    ]})
+
+
+@app.post("/api/tiktok/tabs/<uid>/run")
+def run_tiktok_tab(uid: str):
+    """Start a bot on the tab. Body:
+
+      video_url          optional single video URL; if empty the bot opens the For You
+                         feed and scrolls through videos.
+      templates          list of comment strings, cycled in order. Required, at least 1.
+      dwell_seconds      seconds to let the video play before commenting. Default 3.
+                         A longer dwell looks less like spam — TikTok flags accounts
+                         that comment within the first second of watching.
+      max_comments       stop after this many successful posts. Default 20.
+      scroll_after_each  scroll to the next video after each post. Default true.
+      cooldown_seconds   minimum pause between successive posts. Default 3.
+                         The bot adds ±40 % jitter on top so the cadence is irregular.
+      skip_first         skip the first `skip_first` videos (let them play through
+                         before commenting). Default 0 — comment on every video.
+      headless           run in an invisible, dedicated Chrome with its own
+                         profile. Default false. Auto-enabled when the tab came
+                         from an account profile (no live Chrome tab exists). The
+                         user signs in once via the `/api/tiktok/login-profile`
+                         helper; after that every run uses the saved session
+                         without ever showing a window.
+    """
+    body = request.get_json(silent=True) or {}
+    templates = body.get("templates") or []
+    templates = [str(t).strip() for t in templates if str(t).strip()]
+    if not templates:
+        return jsonify({"ok": False, "error": "add at least one comment template"}), 400
+
+    try:
+        tabs_list = _run_async(tabs.scan_tiktok_tabs(), timeout=30.0)
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"CDP scan failed: {e}"}), 500
+    tab = next((t for t in tabs_list if t["uid"] == uid), None)
+    if not tab:
+        return jsonify({"ok": False, "error": "tab not found — refresh the page"}), 404
+    if not tab.get("logged_in"):
+        return jsonify({"ok": False, "error": "this tab is not logged in to TikTok"}), 409
+
+    # Profile-source tabs require headless mode to use the saved cookies.
+    headless_requested = bool(body.get("headless", False)) or tab.get("source") == "profile"
+
+    state = tiktok_runner.start_run(
+        tab=tab,
+        video_url=(body.get("video_url") or "").strip() or None,
+        templates=templates,
+        dwell_s=float(body.get("dwell_seconds") or 3),
+        max_comments=int(body.get("max_comments") or 20),
+        scroll_after_each=bool(body.get("scroll_after_each", True)),
+        cooldown_s=float(body.get("cooldown_seconds") or 3),
+        skip_first=int(body.get("skip_first") or 0),
+        headless=headless_requested,
+    )
+    return jsonify({"ok": True, "state": state})
+    """Start a bot on the tab. Body:
+
+      video_url          optional single video URL; if empty the bot opens the For You
+                         feed and scrolls through videos.
+      templates          list of comment strings, cycled in order. Required, at least 1.
+      dwell_seconds      seconds to let the video play before commenting. Default 3.
+                         A longer dwell looks less like spam — TikTok flags accounts
+                         that comment within the first second of watching.
+      max_comments       stop after this many successful posts. Default 20.
+      scroll_after_each  scroll to the next video after each post. Default true.
+      cooldown_seconds   minimum pause between successive posts. Default 3.
+                         The bot adds ±40 % jitter on top so the cadence is irregular.
+      skip_first         skip the first `skip_first` videos (let them play through
+                         before commenting). Default 0 — comment on every video.
+      headless           run in an invisible, dedicated Chrome with its own
+                         profile. Default false. The user signs in once via the
+                         `/api/tiktok/headless-login` helper; after that every
+                         run uses the saved session without ever showing a window.
+    """
+    body = request.get_json(silent=True) or {}
+    templates = body.get("templates") or []
+    templates = [str(t).strip() for t in templates if str(t).strip()]
+    if not templates:
+        return jsonify({"ok": False, "error": "add at least one comment template"}), 400
+
+    try:
+        tabs_list = _run_async(tabs.scan_tiktok_tabs(), timeout=30.0)
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"CDP scan failed: {e}"}), 500
+    tab = next((t for t in tabs_list if t["uid"] == uid), None)
+    if not tab:
+        return jsonify({"ok": False, "error": "tab not found — refresh the page"}), 404
+    if not tab.get("logged_in"):
+        return jsonify({"ok": False, "error": "this tab is not logged in to TikTok"}), 409
+
+    state = tiktok_runner.start_run(
+        tab=tab,
+        video_url=(body.get("video_url") or "").strip() or None,
+        templates=templates,
+        dwell_s=float(body.get("dwell_seconds") or 3),
+        max_comments=int(body.get("max_comments") or 20),
+        scroll_after_each=bool(body.get("scroll_after_each", True)),
+        cooldown_s=float(body.get("cooldown_seconds") or 3),
+        skip_first=int(body.get("skip_first") or 0),
+        headless=bool(body.get("headless", False)),
+    )
+    return jsonify({"ok": True, "state": state})
+
+
+@app.post("/api/tiktok/tabs/<uid>/stop")
+def stop_tiktok_tab(uid: str):
+    """Cancel the run for this tab. Returns the final state if it was running."""
+    was_running = tiktok_runner.stop_run(uid)
+    return jsonify({"ok": True, "was_running": was_running,
+                    "state": tiktok_runner.get_state(uid) or {}})
+
+
+@app.get("/api/tiktok/stream/<uid>")
+def stream_tiktok_tab(uid: str):
+    """SSE: per-tab run state changes + log lines. Replay existing buffer on connect."""
+    q = tiktok_runner.subscribe(uid)
+
+    def gen():
+        for line in tiktok_runner.get_log(uid):
+            import json
+            yield f"event: log\ndata: {json.dumps({'line': line})}\n\n"
+        state = tiktok_runner.get_state(uid)
+        if state:
+            import json
+            yield f"event: state\ndata: {json.dumps(state)}\n\n"
+        try:
+            while True:
+                try:
+                    event, data = q.get(timeout=15.0)
+                    yield f"event: {event}\ndata: {data}\n\n"
+                except queue.Empty:
+                    yield "event: ping\ndata: {}\n\n"
+        finally:
+            tiktok_runner.unsubscribe(uid, q)
+
+    return Response(gen(), mimetype="text/event-stream",
+                    headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
 if __name__ == "__main__":

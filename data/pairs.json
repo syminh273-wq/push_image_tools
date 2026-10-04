@@ -14,12 +14,15 @@
     "account": "auto",
     "email": null,
     "timeout": 600,
-    "status": "queued",
+    "status": "failed",
     "created_at": "2026-10-03T13:30:27",
-    "started_at": null,
-    "finished_at": null,
-    "exit_code": null,
-    "output": null
+    "started_at": "2026-10-04T18:11:58",
+    "finished_at": "2026-10-04T18:12:02",
+    "exit_code": 1,
+    "output": null,
+    "assigned_account": "123",
+    "retry_count": 3,
+    "abandoned": true
   },
   {
     "id": "p_2333e701",
@@ -183,5 +186,28 @@
     "assigned_account": "ac1",
     "retry_count": 0,
     "abandoned": false
+  },
+  {
+    "id": "p_cded390a",
+    "prompt_id": "pr_3b52fee5",
+    "prompt_name": "Túi xách – xoay 360° studio",
+    "product_name": "túi sách channel",
+    "model_image": null,
+    "product_image": "/Users/siminh/workspace/gemini_video_tool/data/uploads/20261004-124151-0708ff.png",
+    "image": "/Users/siminh/workspace/gemini_video_tool/data/uploads/20261004-124151-0708ff.png",
+    "video": null,
+    "video_start": 0.0,
+    "prompt": "Create a product showcase video for the handbag \"túi sách channel\".\nThe handbag in the provided image is the product; it must look EXACTLY the same: shape, color,\nmaterial, logo, stitching and hardware. No people.\nACTION: the handbag slowly rotates 360 degrees on a round pedestal.\nSCENE: premium studio, soft gradient background, gentle rim light, subtle reflections on the floor.\nCAMERA: static, slight slow push-in at the end on the logo and texture.\nQUALITY:\nPhotorealistic commercial video, natural lighting, realistic physics, sharp product details.\nAvoid: distorted product, wrong logo or text, changed colors, extra limbs, deformed hands,\nduplicated objects, flickering, sudden scene changes, watermarks, on-screen text.\n\nSTRICT CONSISTENCY RULES (must be followed in every frame):\n- One continuous shot from start to end: no cuts, no scene changes, no transitions, no fades.\n- Slow, smooth, steady motion only; nothing moves fast or jerks.\n- Every object visible in the first frame stays visible and unchanged until the last frame:\n  nothing appears, disappears, duplicates, merges, melts or changes shape.\n- Same background, lighting and colors for the whole video; no flicker, no sudden exposure changes.\n- Do not add text, captions, subtitles, logos or watermarks.\n- The product from the reference image is the hero: it stays fully inside the frame, in sharp\n  focus and clearly visible in EVERY frame.\n- Never hide, crop, cover or block the product (no hands, hair, props or camera angles in front of it).\n- The product keeps the exact shape, size, proportions, color, material, texture, logo, printed text\n  and small details of the reference image in every frame. Parts such as straps, handles, chains,\n  buckles, zippers, caps, labels and soles must never vanish, bend, melt or be redrawn.\n- If the product rotates, it turns slowly and evenly (about 10 seconds for a full turn); its sides and\n  back stay consistent with the front, with no warping during the turn.\n- The camera keeps a distance where the whole product fits in frame; at most one gentle push-in at\n  the end, never an extreme close-up that cuts parts off.",
+    "mode": "account",
+    "account": "123",
+    "email": null,
+    "timeout": 600,
+    "status": "failed",
+    "created_at": "2026-10-04T12:41:56",
+    "started_at": "2026-10-04T12:41:56",
+    "finished_at": "2026-10-04T14:09:23",
+    "exit_code": 1,
+    "output": null,
+    "assigned_account": "123"
   }
 ]

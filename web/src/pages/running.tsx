@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { ActivityIcon, ClockIcon, PlayCircleIcon, ScrollTextIcon, SquareIcon, UsersIcon } from "lucide-react"
 import { toast } from "sonner"
 
@@ -26,6 +26,11 @@ import { fmtElapsed, stepNumber, uploadUrl } from "@/lib/format"
 export function RunningPage() {
   const { processes, pairs, refreshProcesses, refreshPairs } = useAppData()
   const [stopping, setStopping] = useState<RunningJob | null>(null)
+
+  useEffect(() => {
+    refreshProcesses().catch(() => {})
+    refreshPairs().catch(() => {})
+  }, [refreshProcesses, refreshPairs])
 
   async function stop(job: RunningJob) {
     try {
