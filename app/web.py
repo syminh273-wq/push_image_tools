@@ -13,6 +13,7 @@ from datetime import datetime
 from pathlib import Path
 
 from flask import Flask, Response, jsonify, request, send_from_directory
+from flask_cors import CORS
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys_path = str(PROJECT_ROOT)
@@ -43,6 +44,7 @@ WEB_DIST = PROJECT_ROOT / "web" / "dist"
 
 app = Flask(__name__, static_folder=None)
 app.config["MAX_CONTENT_LENGTH"] = 500 * 1024 * 1024  # 500 MB
+CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 
 # A single asyncio loop for the whole app, owned by a daemon thread. Flask handlers
@@ -1234,4 +1236,4 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", "5050"))
     if not any(a["status"] != "unknown" for a in accounts.get_all()):
         accounts.scan_all()
-    app.run(host="127.0.0.1", port=port, debug=False, threaded=True)
+    app.run(host="0.0.0.0", port=port, debug=False, threaded=True)

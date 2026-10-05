@@ -1,12 +1,9 @@
 accounts/*
 !accounts/.gitkeep
-
 screenshots/*
 !screenshots/.gitkeep
-
 output/*
 !output/.gitkeep
-
 .env
 *.log
 
@@ -15,3 +12,6 @@ __pycache__/
 *.pyc
 
 web/node_modules/
+web/dist/
+
+.DS_Store

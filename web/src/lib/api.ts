@@ -132,9 +132,12 @@ export type ModelImage = {
 
 export type Counts = Record<PairStatus, number>
 
+const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? ""
+
 export async function api<T = unknown>(path: string, init: RequestInit & { json?: unknown } = {}): Promise<T> {
   const { json, ...rest } = init
-  const res = await fetch(path, {
+  const url = path.startsWith("http") ? path : `${API_BASE}${path}`
+  const res = await fetch(url, {
     ...rest,
     headers: json !== undefined ? { "Content-Type": "application/json", ...rest.headers } : rest.headers,
     body: json !== undefined ? JSON.stringify(json) : rest.body,
