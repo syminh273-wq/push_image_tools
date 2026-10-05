@@ -22,6 +22,7 @@ import { EmptyState } from "@/components/empty-state"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { PageHeader } from "@/components/page-header"
 import {
   Dialog,
   DialogClose,
@@ -449,27 +450,12 @@ export function TikTokPage() {
     }
   }, [])
 
+  // Scan only on first mount and on explicit user action — no auto polling.
+  // Live counters/logs come from the SSE stream below, so we don't need to
+  // hammer /api/tiktok/tabs in the background.
   useEffect(() => {
     refresh()
-    // Faster poll while something is active, so counters feel live even when the
-    // log dialog is closed. Every SSE state event also updates tabs in place.
-    let fastTimer: ReturnType<typeof setInterval> | null = null
-    const tick = () => {
-      const hasRunning = (tabs ?? []).some((t) => t.state.is_running)
-      if (hasRunning) {
-        if (!fastTimer) fastTimer = setInterval(refresh, 2000)
-      } else if (fastTimer) {
-        clearInterval(fastTimer)
-        fastTimer = null
-      }
-    }
-    const slowTimer = setInterval(tick, 1000)
-    tick()
-    return () => {
-      clearInterval(slowTimer)
-      if (fastTimer) clearInterval(fastTimer)
-    }
-  }, [refresh, tabs])
+  }, [refresh])
 
   // Append a single log line to the matching tab's mini-log buffer.
   const handleLiveLog = useCallback((uid: string, line: string) => {
@@ -565,13 +551,11 @@ export function TikTokPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="grid gap-1">
-          <h1 className="font-heading text-2xl font-semibold tracking-tight">TikTok manager</h1>
-          <p className="text-sm text-muted-foreground">
-            Quét Chrome qua CDP, liệt kê các tab TikTok đang mở và chạy auto-comment trên tab đã đăng nhập.
-          </p>
-        </div>
+      <PageHeader
+        icon={VideoIcon}
+        title="TikTok manager"
+        description="Quét Chrome qua CDP, liệt kê các tab TikTok đang mở và chạy auto-comment trên tab đã đăng nhập."
+      >
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="outline" className="gap-1.5">
             <VideoIcon className="size-3" /> {summary.total} tab
@@ -623,7 +607,7 @@ export function TikTokPage() {
             <ShieldCheckIcon data-icon="inline-start" /> Đăng nhập ngầm
           </Button>
         </div>
-      </div>
+      </PageHeader>
 
       {loading && !tabs ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">

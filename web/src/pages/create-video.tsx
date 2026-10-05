@@ -153,7 +153,7 @@ export function CreateVideoPage() {
         <div className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>1. Chọn loại quảng cáo</CardTitle>
+              <CardTitle className="font-heading tracking-tight">1. Chọn loại quảng cáo</CardTitle>
               <CardDescription>Mỗi prompt đã viết sẵn cho một loại sản phẩm.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -212,8 +212,8 @@ export function CreateVideoPage() {
           {prompt && (
             <Card>
               <CardHeader>
-                <CardTitle>2. Tải ảnh / video</CardTitle>
-                <CardDescription>Chỉ hiện những file mà prompt này cần.</CardDescription>
+                <CardTitle className="font-heading tracking-tight">2. Tải ảnh / video</CardTitle>
+                <CardDescription>Tối đa 100 MB, video sẽ được cắt còn 10 giây.</CardDescription>
               </CardHeader>
               <CardContent className="grid gap-4 sm:grid-cols-2">
                 {prompt.inputs.model_image && (
@@ -274,7 +274,7 @@ export function CreateVideoPage() {
         <div className="space-y-6 lg:sticky lg:top-20">
           <Card>
             <CardHeader>
-              <CardTitle>3. Xem trước</CardTitle>
+              <CardTitle className="font-heading tracking-tight">3. Xem trước</CardTitle>
               {prompt && (
                 <CardDescription className="flex items-center gap-2">
                   <Badge variant="secondary">

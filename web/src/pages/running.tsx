@@ -73,7 +73,7 @@ export function RunningPage() {
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {stats.map((s) => (
-          <Card key={s.label} className="gap-1">
+          <Card key={s.label} className="gap-1 transition-colors hover:border-primary/40">
             <CardHeader>
               <CardDescription>{s.label}</CardDescription>
               <CardAction>
@@ -81,7 +81,7 @@ export function RunningPage() {
               </CardAction>
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-semibold tabular-nums">{s.value}</p>
+              <p className="font-heading text-2xl font-semibold tracking-tight tabular-nums">{s.value}</p>
             </CardContent>
           </Card>
         ))}

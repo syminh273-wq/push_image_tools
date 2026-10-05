@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { DownloadIcon, FilmIcon, SparklesIcon } from "lucide-react"
 
 import { EmptyState } from "@/components/empty-state"
+import { PageHeader } from "@/components/page-header"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -50,7 +51,12 @@ export function GalleryPage() {
   const list = outputs.filter((o) => filter === "all" || o.category === filter)
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
+      <PageHeader
+        icon={FilmIcon}
+        title="Thư viện video"
+        description="Tất cả video đã tạo bằng Gemini, sẵn sàng tải về hoặc dùng lại."
+      />
       {used.length > 0 && (
         <Tabs value={filter} onValueChange={(v) => setFilter(v as typeof filter)} className="overflow-x-auto">
           <TabsList>
@@ -68,17 +74,22 @@ export function GalleryPage() {
         {list.map((f) => {
           const c = f.category ? categoryOf(f.category) : null
           return (
-            <Card key={f.name} className="overflow-hidden pt-0">
+            <Card key={f.name} className="card-interactive overflow-hidden pt-0">
               <Button
                 variant="ghost"
-                className="block aspect-video h-auto w-full rounded-none bg-muted p-0"
+                className="group block aspect-video h-auto w-full rounded-none bg-muted p-0"
                 onClick={() => setOpen(f)}
                 aria-label={`Xem ${f.product_name || f.name}`}
               >
-                <video src={f.url} preload="metadata" muted className="pointer-events-none size-full object-cover" />
+                <video
+                  src={f.url}
+                  preload="metadata"
+                  muted
+                  className="pointer-events-none size-full object-cover transition-transform duration-300 group-hover:scale-105"
+                />
               </Button>
               <CardHeader>
-                <CardTitle className="truncate">{f.product_name || f.name}</CardTitle>
+                <CardTitle className="truncate font-heading tracking-tight">{f.product_name || f.name}</CardTitle>
                 <CardDescription className="truncate">{f.prompt_name || f.name}</CardDescription>
               </CardHeader>
               <CardContent className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">

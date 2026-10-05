@@ -11,6 +11,7 @@ import { ListOrderedIcon, PlayIcon, PlusIcon, RotateCcwIcon, SearchIcon } from "
 import { toast } from "sonner"
 
 import { EmptyState } from "@/components/empty-state"
+import { PageHeader } from "@/components/page-header"
 import { PairSheet } from "@/components/pair-sheet"
 import { StatusBadge } from "@/components/status-badge"
 import { Badge } from "@/components/ui/badge"
@@ -147,7 +148,12 @@ export function QueuePage() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
+      <PageHeader
+        icon={ListOrderedIcon}
+        title="Hàng đợi"
+        description="Tất cả video đang chờ, đang chạy, đã xong hoặc lỗi. Bấm vào hàng để xem chi tiết."
+      />
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <Tabs value={status} onValueChange={(v) => setStatus(v as typeof status)} className="min-w-0 overflow-x-auto">
           <TabsList>

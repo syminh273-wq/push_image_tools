@@ -145,16 +145,18 @@ function ModelPickerDialog({
           <DialogTitle>Chọn model từ thư viện</DialogTitle>
           <DialogDescription>
             Ảnh người mẫu đã lưu. Không có file phù hợp?{" "}
-            <button
+            <Button
               type="button"
-              className="font-medium text-foreground underline-offset-2 hover:underline"
+              variant="link"
+              size="sm"
+              className="h-auto p-0 font-medium text-foreground underline-offset-2 hover:underline"
               onClick={() => {
                 onOpenChange(false)
                 navigate("models")
               }}
             >
               Mở Thư viện Model
-            </button>{" "}
+            </Button>{" "}
             để upload ảnh mới.
           </DialogDescription>
         </DialogHeader>
@@ -196,17 +198,18 @@ function ModelPickerDialog({
           ) : (
             <div className="grid gap-3 sm:grid-cols-3">
               {list.map((m) => (
-                <button
+                <Button
                   key={m.id}
                   type="button"
+                  variant="ghost"
                   className={cn(
-                    "group flex flex-col overflow-hidden rounded-lg border bg-card text-left transition-colors hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+                    "h-auto flex-col overflow-hidden rounded-lg border bg-card p-0 text-left transition-colors hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
                     m.missing && "opacity-60",
                   )}
                   disabled={m.missing}
                   onClick={() => onPick(m)}
                 >
-                  <div className="aspect-square bg-muted">
+                  <div className="aspect-square w-full bg-muted">
                     {m.missing ? (
                       <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
                         missing
@@ -220,11 +223,11 @@ function ModelPickerDialog({
                       />
                     )}
                   </div>
-                  <div className="space-y-0.5 p-2">
+                  <div className="w-full space-y-0.5 p-2">
                     <p className="line-clamp-1 text-sm font-medium">{m.name}</p>
                     <p className="line-clamp-1 text-[10px] text-muted-foreground">{basename(m.image)}</p>
                   </div>
-                </button>
+                </Button>
               ))}
             </div>
           )}

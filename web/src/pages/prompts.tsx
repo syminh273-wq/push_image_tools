@@ -20,6 +20,7 @@ import { toast } from "sonner"
 import { z } from "zod"
 
 import { EmptyState } from "@/components/empty-state"
+import { PageHeader } from "@/components/page-header"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -98,6 +99,15 @@ export function PromptsPage() {
 
   return (
     <div className="space-y-6">
+      <PageHeader
+        icon={ScrollTextIcon}
+        title="Thư viện Prompt"
+        description="Mẫu prompt cho từng loại sản phẩm — Gemini dùng chúng để viết lời quảng cáo nhất quán."
+      >
+        <Button className="sm:ml-auto" onClick={() => setEditing("new")}>
+          <PlusIcon /> Thêm prompt
+        </Button>
+      </PageHeader>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <Tabs value={filter} onValueChange={(v) => setFilter(v as typeof filter)} className="min-w-0 overflow-x-auto">
           <TabsList>
@@ -109,9 +119,6 @@ export function PromptsPage() {
             ))}
           </TabsList>
         </Tabs>
-        <Button className="sm:ml-auto" onClick={() => setEditing("new")}>
-          <PlusIcon /> Thêm prompt
-        </Button>
       </div>
 
       {!prompts ? (
@@ -136,9 +143,9 @@ export function PromptsPage() {
           {list.map((p) => {
             const c = categoryOf(p.category)
             return (
-              <Card key={p.id} className="flex flex-col">
+              <Card key={p.id} className="card-interactive flex flex-col">
                 <CardHeader>
-                  <CardTitle className="leading-snug">{p.name}</CardTitle>
+                  <CardTitle className="font-heading leading-snug tracking-tight">{p.name}</CardTitle>
                   <CardDescription>
                     <Badge variant="secondary">
                       <c.icon /> {c.label}

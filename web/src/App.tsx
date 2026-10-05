@@ -32,7 +32,7 @@ export default function App() {
       <AppSidebar />
       <SidebarInset>
         <SiteHeader title={current.title} />
-        <main className="mx-auto w-full max-w-7xl flex-1 p-4 md:p-6">{current.render()}</main>
+        <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 md:px-8 md:py-8">{current.render()}</main>
       </SidebarInset>
     </SidebarProvider>
   )

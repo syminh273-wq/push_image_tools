@@ -20,6 +20,7 @@ import { toast } from "sonner"
 import { z } from "zod"
 
 import { EmptyState } from "@/components/empty-state"
+import { PageHeader } from "@/components/page-header"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -203,25 +204,24 @@ export function AccountsPage() {
   const table = useReactTable({ data: accounts, columns, getCoreRowModel: getCoreRowModel() })
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <p className="text-sm text-muted-foreground">
-          Mỗi tài khoản là một profile Chrome riêng, chạy tối đa 1 video một lúc.
-        </p>
-        <div className="ml-auto flex gap-2">
-          <Button
-            variant="outline"
-            disabled={processes?.scanning}
-            onClick={() => act("/api/accounts/scan", "POST", "Đang kiểm tra tất cả tài khoản")}
-          >
-            <RefreshCwIcon className={processes?.scanning ? "animate-spin" : undefined} />
-            {processes?.scanning ? "Đang kiểm tra…" : "Kiểm tra tất cả"}
-          </Button>
-          <Button onClick={() => setAdding(true)}>
-            <PlusIcon /> Thêm tài khoản
-          </Button>
-        </div>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        icon={UsersIcon}
+        title="Tài khoản"
+        description="Mỗi tài khoản là một profile Chrome riêng, chạy tối đa 1 video một lúc."
+      >
+        <Button
+          variant="outline"
+          disabled={processes?.scanning}
+          onClick={() => act("/api/accounts/scan", "POST", "Đang kiểm tra tất cả tài khoản")}
+        >
+          <RefreshCwIcon className={processes?.scanning ? "animate-spin" : undefined} />
+          {processes?.scanning ? "Đang kiểm tra…" : "Kiểm tra tất cả"}
+        </Button>
+        <Button onClick={() => setAdding(true)}>
+          <PlusIcon /> Thêm tài khoản
+        </Button>
+      </PageHeader>
 
       {!processes ? (
         <Skeleton className="h-48 rounded-xl" />

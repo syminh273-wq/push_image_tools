@@ -42,10 +42,10 @@ export function SiteHeader({ title }: { title: string }) {
   }
 
   return (
-    <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b bg-background/80 px-4 backdrop-blur">
+    <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b bg-background/70 px-5 shadow-[0_1px_0_0_oklch(0.92_0.012_264_/_0.6)] backdrop-blur-xl supports-[backdrop-filter]:bg-background/60">
       <SidebarTrigger className="-ml-1" />
       <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
-      <h1 className="truncate text-base font-medium">{title}</h1>
+      <h1 className="truncate font-heading text-base font-semibold tracking-tight">{title}</h1>
       <div className="ml-auto flex items-center gap-2">
         <div className="hidden items-center gap-1.5 sm:flex">
           {running > 0 && (

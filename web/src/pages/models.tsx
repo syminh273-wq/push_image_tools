@@ -18,6 +18,7 @@ import { toast } from "sonner"
 import { z } from "zod"
 
 import { EmptyState } from "@/components/empty-state"
+import { PageHeader } from "@/components/page-header"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -48,6 +49,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Textarea } from "@/components/ui/textarea"
 import { useAppData } from "@/hooks/app-data"
@@ -102,6 +104,15 @@ export function ModelsPage() {
 
   return (
     <div className="space-y-6">
+      <PageHeader
+        icon={UserCircleIcon}
+        title="Thư viện Model"
+        description="Ảnh người mẫu đã lưu — chọn nhanh khi tạo video, hoặc upload thêm để dùng cho prompt mới."
+      >
+        <Button onClick={() => setEditing("new")}>
+          <PlusIcon /> Thêm model
+        </Button>
+      </PageHeader>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="relative flex-1 sm:max-w-xs">
           <SearchIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -112,9 +123,6 @@ export function ModelsPage() {
             className="pl-9"
           />
         </div>
-        <Button className="sm:ml-auto" onClick={() => setEditing("new")}>
-          <PlusIcon /> Thêm model
-        </Button>
       </div>
 
       {!list ? (
@@ -187,7 +195,7 @@ function ModelCard({
   onDelete: () => void
 }) {
   return (
-    <Card className="flex flex-col overflow-hidden">
+    <Card className="card-interactive flex flex-col overflow-hidden">
       <div className="relative aspect-square bg-muted">
         {model.missing ? (
           <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-muted-foreground">
@@ -392,8 +400,10 @@ function ModelEditor({
                         {tags.map((t) => (
                           <Badge key={t} variant="secondary" className="gap-1 pr-1">
                             {t}
-                            <button
+                            <Button
                               type="button"
+                              variant="ghost"
+                              size="icon"
                               onClick={() =>
                                 form.setValue(
                                   "tags",
@@ -401,11 +411,11 @@ function ModelEditor({
                                   { shouldDirty: true },
                                 )
                               }
-                              className="ml-1 rounded-sm hover:bg-muted-foreground/20"
+                              className="ml-1 size-4 rounded-sm hover:bg-muted-foreground/20"
                               aria-label={`Bỏ tag ${t}`}
                             >
                               <XIcon className="size-3" />
-                            </button>
+                            </Button>
                           </Badge>
                         ))}
                       </div>
@@ -473,7 +483,7 @@ function ImagePicker({
     )
   }
   return (
-    <label
+    <Label
       htmlFor={id}
       className={cn(
         "flex h-48 cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed text-center transition-colors hover:bg-muted/50 focus-within:ring-3 focus-within:ring-ring/50",
@@ -493,6 +503,6 @@ function ImagePicker({
           e.target.value = ""
         }}
       />
-    </label>
+    </Label>
   )
 }

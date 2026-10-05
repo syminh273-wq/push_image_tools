@@ -4,6 +4,7 @@ import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { uploadFile } from "@/lib/api"
 import { basename, uploadUrl } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -66,7 +67,7 @@ export function FileUpload({
   }
 
   return (
-    <label
+    <Label
       htmlFor={id}
       onDragOver={(e) => {
         e.preventDefault()
@@ -104,6 +105,6 @@ export function FileUpload({
           e.target.value = ""
         }}
       />
-    </label>
+    </Label>
   )
 }
