@@ -3,7 +3,7 @@
 import os
 import sys
 
-from PyInstaller.utils.hooks import collect_submodules
+from PyInstaller.utils.hooks import collect_all, collect_submodules
 
 ROOT = os.path.abspath(os.path.join(SPECPATH, ".."))
 sys.path.insert(0, ROOT)
@@ -16,11 +16,24 @@ datas = [
     ("data/system_rules.json", "data"),
 ]
 
+datas = [(os.path.join(ROOT, src), dst) for src, dst in datas]
+binaries = []
+hiddenimports = collect_submodules("app")
+if sys.platform == "win32":
+    # The app window: pywebview on Edge WebView2, reached through pythonnet (.NET).
+    for pkg in ("webview", "clr_loader", "pythonnet"):
+        d, b, h = collect_all(pkg)
+        datas += d
+        binaries += b
+        hiddenimports += h
+    hiddenimports += ["clr", "keyring.backends.Windows"]
+
 a = Analysis(
     [os.path.join(SPECPATH, "launcher.py")],
     pathex=[ROOT],
-    datas=[(os.path.join(ROOT, src), dst) for src, dst in datas],
-    hiddenimports=collect_submodules("app") + (["keyring.backends.Windows"] if sys.platform == "win32" else []),
+    datas=datas,
+    binaries=binaries,
+    hiddenimports=hiddenimports,
 )
 pyz = PYZ(a.pure)
 # No console window on Windows: the app opens in its own pywebview window.

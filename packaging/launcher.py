@@ -53,12 +53,16 @@ def _show_window(url: str) -> None:
     try:
         import webview
     except ImportError:
+        if sys.platform == "win32":
+            raise  # the Windows build must open as an app window, never silently in a browser
         webbrowser.open(url)
         print(f"{TITLE} is running at {url}  (Ctrl+C to stop)")
         threading.Event().wait()
         return
-    webview.create_window(TITLE, url, width=1280, height=860, min_size=(900, 600))
-    webview.start()  # returns when the window is closed; daemon threads end with the process
+    window = webview.create_window(TITLE, url, width=1280, height=860, min_size=(900, 600))
+    window.events.loaded += lambda: print("window shown")
+    # Returns when the window is closed; daemon threads end with the process.
+    webview.start(gui="edgechromium" if sys.platform == "win32" else None)
 
 
 def main() -> None:
@@ -67,11 +71,6 @@ def main() -> None:
         _start_server()
     print(f"{TITLE} server at {url}")
     if os.environ.get("NO_WINDOW") == "1":
-        try:
-            import webview  # noqa: F401
-            print("pywebview available")
-        except ImportError:
-            print("pywebview missing - would fall back to the browser")
         threading.Event().wait()
     _show_window(url)
 

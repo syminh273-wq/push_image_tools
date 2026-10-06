@@ -34,29 +34,27 @@ jobs:
           pip install -r requirements.txt pyinstaller
           pyinstaller --noconfirm --distpath dist --workpath build packaging/gemini_video_tool.spec
 
-      - name: Smoke test (start the exe and load the UI)
-        env:
-          NO_WINDOW: "1"
-          PORT: "5050"
+      - name: Smoke test (open the app window and load the UI)
         run: |
-          $p = Start-Process -FilePath dist/GeminiVideoTool/GeminiVideoTool.exe -PassThru
+          $dir = "dist/GeminiVideoTool"
+          $log = "$dir/GeminiVideoTool.log"; $errlog = "$dir/GeminiVideoTool-error.log"
+          $p = Start-Process -FilePath "$dir/GeminiVideoTool.exe" -PassThru
           $ok = $false
-          for ($i = 0; $i -lt 60 -and -not $ok; $i++) {
+          for ($i = 0; $i -lt 90 -and -not $ok; $i++) {
             Start-Sleep -Seconds 1
-            try { $ok = (Invoke-WebRequest http://127.0.0.1:5050/ -UseBasicParsing -TimeoutSec 2).StatusCode -eq 200 } catch {}
-            if ($p.HasExited) { break }
+            $ok = (Test-Path $log) -and (Select-String -Path $log -Pattern "window shown" -Quiet)
+            if ((Test-Path $errlog) -or $p.HasExited) { break }
           }
-          $logs = "dist/GeminiVideoTool/GeminiVideoTool.log", "dist/GeminiVideoTool/GeminiVideoTool-error.log"
-          Get-Content $logs -ErrorAction SilentlyContinue
-          $tail = (Get-Content $logs -Tail 15 -ErrorAction SilentlyContinue) -join '%0A'
+          $tail = ((Get-Content $errlog, $log -ErrorAction SilentlyContinue) | Select-Object -Last 25) -join '%0A'
           if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force }
-          Start-Sleep -Seconds 1
-          Remove-Item $logs -ErrorAction SilentlyContinue
+          Get-Process msedgewebview2 -ErrorAction SilentlyContinue | Stop-Process -Force
+          Start-Sleep -Seconds 2
+          Remove-Item $log, $errlog -ErrorAction SilentlyContinue
           if (-not $ok) {
-            Write-Output "::error title=exe did not start::$tail"
+            Write-Output "::error title=app window did not open::$tail"
             exit 1
           }
-          Write-Output "::notice title=exe log::$tail"
+          Write-Output "::notice title=app log::$tail"
 
       - uses: actions/upload-artifact@v4
         with:
