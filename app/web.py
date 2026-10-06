@@ -15,12 +15,12 @@ from pathlib import Path
 from flask import Flask, Response, jsonify, request, send_from_directory
 from flask_cors import CORS
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-sys_path = str(PROJECT_ROOT)
 import sys
+sys_path = str(Path(__file__).resolve().parent.parent)
 if sys_path not in sys.path:
     sys.path.insert(0, sys_path)
 
+from app.paths import BUNDLE_ROOT  # noqa: E402
 from app import accounts, credentials, models_store, prompt_store, runner, store, tabs, tiktok_runner  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
@@ -40,7 +40,7 @@ OUTPUT_DIR = store.PROJECT_ROOT / "output"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # The React app (web/) is built into web/dist and served from here.
-WEB_DIST = PROJECT_ROOT / "web" / "dist"
+WEB_DIST = BUNDLE_ROOT / "web" / "dist"
 
 app = Flask(__name__, static_folder=None)
 app.config["MAX_CONTENT_LENGTH"] = 500 * 1024 * 1024  # 500 MB

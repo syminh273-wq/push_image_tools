@@ -6,7 +6,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+from .paths import PROJECT_ROOT
 ACCOUNTS_DIR = PROJECT_ROOT / "accounts"
 SCREENSHOTS_DIR = PROJECT_ROOT / "screenshots"
 DEFAULT_PROMPT_FILE = PROJECT_ROOT / "prompts" / "default.txt"

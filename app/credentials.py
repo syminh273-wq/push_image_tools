@@ -1,4 +1,5 @@
-"""Saved Google sign-in (Gmail + password) per profile, kept in the macOS Keychain.
+"""Saved Google sign-in (Gmail + password) per profile, kept in the macOS Keychain
+(or, on Windows/Linux, the OS credential store via `keyring`).
 
 Nothing is written to the project folder: each profile is one generic-password item
 (service SERVICE, account = profile name) whose secret is {"email", "password", "totp"} as
@@ -13,6 +14,7 @@ import hmac
 import json
 import struct
 import subprocess
+import sys
 import time
 
 SERVICE = "gemini_video_tool"
@@ -41,22 +43,49 @@ def totp_code(key: str, at: float | None = None) -> str:
     return f"{value % 1_000_000:06d}"
 
 
-def save(name: str, email: str, password: str, totp: str | None = None) -> None:
-    secret = json.dumps({"email": email, "password": password, "totp": totp or None})
+def _store_secret(name: str, secret: str) -> None:
+    if sys.platform != "darwin":
+        import keyring
+        keyring.set_password(SERVICE, name, secret)
+        return
     # -U updates the item if it already exists.
     r = _security("add-generic-password", "-U", "-s", SERVICE, "-a", name, "-w", secret)
     if r.returncode != 0:
         raise RuntimeError(f"could not save to Keychain: {r.stderr.strip()}")
+
+
+def _load_secret(name: str) -> str | None:
+    if sys.platform != "darwin":
+        import keyring
+        return keyring.get_password(SERVICE, name)
+    r = _security("find-generic-password", "-s", SERVICE, "-a", name, "-w")
+    return r.stdout.strip() if r.returncode == 0 else None
+
+
+def _delete_secret(name: str) -> bool:
+    if sys.platform != "darwin":
+        import keyring
+        from keyring.errors import PasswordDeleteError
+        try:
+            keyring.delete_password(SERVICE, name)
+            return True
+        except PasswordDeleteError:
+            return False
+    return _security("delete-generic-password", "-s", SERVICE, "-a", name).returncode == 0
+
+
+def save(name: str, email: str, password: str, totp: str | None = None) -> None:
+    _store_secret(name, json.dumps({"email": email, "password": password, "totp": totp or None}))
     _has_cache[name] = True
 
 
 def get(name: str) -> dict | None:
     """{"email", "password"} for the profile, or None if nothing is saved."""
-    r = _security("find-generic-password", "-s", SERVICE, "-a", name, "-w")
-    if r.returncode != 0:
+    raw = _load_secret(name)
+    if raw is None:
         return None
     try:
-        data = json.loads(r.stdout.strip())
+        data = json.loads(raw)
     except json.JSONDecodeError:
         return None
     return data if data.get("email") and data.get("password") else None
@@ -64,10 +93,10 @@ def get(name: str) -> dict | None:
 
 def has(name: str) -> bool:
     if name not in _has_cache:
-        _has_cache[name] = _security("find-generic-password", "-s", SERVICE, "-a", name).returncode == 0
+        _has_cache[name] = _load_secret(name) is not None
     return _has_cache[name]
 
 
 def delete(name: str) -> bool:
     _has_cache[name] = False
-    return _security("delete-generic-password", "-s", SERVICE, "-a", name).returncode == 0
+    return _delete_secret(name)

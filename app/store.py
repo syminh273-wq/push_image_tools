@@ -10,7 +10,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+from .paths import PROJECT_ROOT
 DATA_DIR = PROJECT_ROOT / "data"
 UPLOADS_DIR = DATA_DIR / "uploads"
 LOGS_DIR = DATA_DIR / "logs"

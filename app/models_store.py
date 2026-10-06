@@ -12,7 +12,7 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+from .paths import PROJECT_ROOT
 MODELS_FILE = PROJECT_ROOT / "data" / "models.json"
 
 ALLOWED_EXT = {".png", ".jpg", ".jpeg", ".webp"}

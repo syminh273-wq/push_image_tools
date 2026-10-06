@@ -8,6 +8,7 @@ from pathlib import Path
 from playwright.async_api import Browser, BrowserContext, Playwright
 
 from .models import ACCOUNTS_DIR
+from .paths import CHROME_USER_DATA
 
 log = logging.getLogger(__name__)
 
@@ -17,9 +18,6 @@ def profile_dir(account: str) -> Path:
     path = ACCOUNTS_DIR / account
     path.mkdir(parents=True, exist_ok=True)
     return path
-
-
-CHROME_USER_DATA = Path.home() / "Library/Application Support/Google/Chrome"
 
 
 def _chrome_binary() -> str:

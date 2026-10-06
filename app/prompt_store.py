@@ -14,7 +14,7 @@ from pathlib import Path
 
 from .models import DEFAULT_PROMPT_FILE
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+from .paths import PROJECT_ROOT
 PROMPTS_FILE = PROJECT_ROOT / "data" / "prompts.json"
 RULES_FILE = PROJECT_ROOT / "data" / "system_rules.json"
 
