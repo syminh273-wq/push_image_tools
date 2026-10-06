@@ -5,6 +5,9 @@ on:
   push:
     tags: ["v*"]
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest
@@ -34,3 +37,11 @@ jobs:
         with:
           name: GeminiVideoTool-windows
           path: dist/GeminiVideoTool
+
+      - name: Publish release (tag pushes only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          Compress-Archive -Path dist/GeminiVideoTool -DestinationPath GeminiVideoTool-windows.zip
+          gh release create "${{ github.ref_name }}" GeminiVideoTool-windows.zip --title "${{ github.ref_name }}" --notes "Windows build. Unzip, then run GeminiVideoTool.exe (needs Google Chrome)."
