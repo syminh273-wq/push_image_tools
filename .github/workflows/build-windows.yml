@@ -3,6 +3,7 @@ name: Build Windows exe
 on:
   workflow_dispatch:
   push:
+    branches: [main]
     tags: ["v*"]
 
 permissions:
@@ -32,6 +33,27 @@ jobs:
         run: |
           pip install -r requirements.txt pyinstaller
           pyinstaller --noconfirm --distpath dist --workpath build packaging/gemini_video_tool.spec
+
+      - name: Smoke test (start the exe and load the UI)
+        env:
+          NO_BROWSER: "1"
+          PORT: "5050"
+        run: |
+          $p = Start-Process -FilePath dist/GeminiVideoTool/GeminiVideoTool.exe -PassThru `
+                 -RedirectStandardOutput out.log -RedirectStandardError err.log
+          $ok = $false
+          for ($i = 0; $i -lt 60 -and -not $ok; $i++) {
+            Start-Sleep -Seconds 1
+            try { $ok = (Invoke-WebRequest http://127.0.0.1:5050/ -UseBasicParsing -TimeoutSec 2).StatusCode -eq 200 } catch {}
+            if ($p.HasExited) { break }
+          }
+          Get-Content out.log, err.log -ErrorAction SilentlyContinue
+          if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force }
+          if (-not $ok) {
+            $tail = (Get-Content err.log -Tail 15 -ErrorAction SilentlyContinue) -join '%0A'
+            Write-Output "::error title=exe did not start::$tail"
+            exit 1
+          }
 
       - uses: actions/upload-artifact@v4
         with:
