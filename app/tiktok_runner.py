@@ -33,6 +33,9 @@ log = logging.getLogger("gemini_video_tool.tiktok_runner")
 
 # tab_uid -> {"thread", "task", "loop", "state": {counters, started_at, ...}, "stop": Event}
 _running: dict[str, dict] = {}
+# Videos any bot has already commented on this session, shared by all runs so two bots (or two
+# debug Chromes) never comment the same post twice.
+_commented: set[str] = set()
 # tab_uid -> list of queue.Queue for SSE subscribers.
 _subs: dict[str, list[queue.Queue]] = {}
 # tab_uid -> log buffer (last 200 lines).
@@ -152,10 +155,10 @@ async def _run_loop(tab: dict, video_url: Optional[str], templates: list[str],
         # directly on the context.
         headless_ctx = ctx
     else:
-        browser = await tabs.connector.get_browser()
+        browser = await tabs.connector.get_browser(tab["debug_port"])
         if browser is None:
-            _append_log(uid, "[runner] no Chrome with CDP found — start Chrome with "
-                              "--remote-debugging-port=9222 and refresh.")
+            _append_log(uid, f"[runner] Chrome on port {tab['debug_port']} is not answering — "
+                              "check that it is still open, then refresh.")
             _update_state(uid, is_running=False, last_error="no CDP browser")
             return
 
@@ -234,6 +237,21 @@ async def _run_loop(tab: dict, video_url: Optional[str], templates: list[str],
             # "warm up" before commenting.
             if videos_seen <= skip_first:
                 _append_log(uid, f"[runner] skipping video {videos_seen}/{skip_first} (no comment)")
+                if scroll_after_each and sent < max_comments:
+                    moved = await automation.scroll_feed()
+                    if not moved:
+                        _append_log(uid, "[runner] could not scroll to next video, stopping")
+                        break
+                continue
+
+            key = await automation.video_key()
+            with _lock:
+                already = bool(key) and key in _commented
+                if key and not already:
+                    # Reserve before posting, so a second bot cannot pick the same video meanwhile.
+                    _commented.add(key)
+            if already:
+                _append_log(uid, "[runner] video này đã được comment rồi — bỏ qua")
                 if scroll_after_each and sent < max_comments:
                     moved = await automation.scroll_feed()
                     if not moved:
@@ -326,6 +344,10 @@ def start_run(*, tab: dict, video_url: Optional[str], templates: list[str],
             return {**existing["state"], "already_running": True}
 
     state = _make_default_state(tab)
+    # Running from the moment it is accepted, so the UI shows Dừng right away instead of waiting
+    # for the page to open.
+    state["is_running"] = True
+    state["started_at"] = _now()
     stop = threading.Event()
     rec: dict = {"thread": None, "task": None, "loop": None,
                  "state": state, "stop": stop}
@@ -400,6 +422,16 @@ def stop_run(uid: str) -> bool:
         return False
     rec["stop"].set()
     return True
+
+
+def stop_all() -> list[str]:
+    """Signal every running bot to stop. Returns the uids that were running."""
+    with _lock:
+        uids = [uid for uid, rec in _running.items()
+                if rec.get("thread") and rec["thread"].is_alive()]
+    for uid in uids:
+        stop_run(uid)
+    return uids
 
 
 def get_state(uid: str) -> Optional[dict]:

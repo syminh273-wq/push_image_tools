@@ -23,6 +23,14 @@ elif sys.platform == "darwin":
 else:
     CHROME_USER_DATA = Path.home() / ".config/google-chrome"
 
+# Chrome 136+ ignores --remote-debugging-port when it uses the default user-data dir, so each
+# CDP-controlled Chrome gets its own profile. The first one uses CDP_PROFILE_DIR; the next ones use
+# chrome-cdp-profile-<id>. Every launched instance is listed in CDP_INSTANCES_FILE with its port.
+CDP_PROFILE_DIR = PROJECT_ROOT / "data" / "chrome-cdp-profile"
+CDP_INSTANCES_FILE = PROJECT_ROOT / "data" / "chrome-cdp-instances.json"
+# Written by the build before the instance registry; read once to adopt that Chrome.
+CDP_PORT_FILE = CDP_PROFILE_DIR / "cdp_port.txt"
+
 # Seed files copied next to the executable on first run; the user's own data is never bundled.
 _SEED_FILES = ("prompts/default.txt", "prompts/tiktok_content.txt",
                "data/prompts.json", "data/system_rules.json")

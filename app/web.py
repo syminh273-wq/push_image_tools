@@ -1012,7 +1012,18 @@ def list_tiktok_tabs():
             "started_at": state.get("started_at"),
             "stopped_at": state.get("stopped_at"),
         }
-    return jsonify({"ok": True, "tabs": tabs_list})
+    return jsonify({"ok": True, "tabs": tabs_list, "chromes": tabs.debug_chromes(tabs_list)})
+
+
+@app.post("/api/tiktok/chrome/start")
+def start_debug_chrome():
+    """Open another debug Chrome (its own port and profile). Each call adds one window."""
+    try:
+        inst = _run_async(tabs.launch_debug_chrome(), timeout=30.0)
+    except Exception as e:
+        log.warning("start debug Chrome failed: %r", e)
+        return jsonify({"ok": False, "error": f"không mở được Chrome debug: {e}"}), 500
+    return jsonify({"ok": True, "chrome": {"id": inst["id"], "port": inst["port"], "label": inst["label"]}})
 
 
 @app.post("/api/tiktok/scan")
@@ -1202,6 +1213,13 @@ def stop_tiktok_tab(uid: str):
     was_running = tiktok_runner.stop_run(uid)
     return jsonify({"ok": True, "was_running": was_running,
                     "state": tiktok_runner.get_state(uid) or {}})
+
+
+@app.post("/api/tiktok/stop-all")
+def stop_all_tiktok_tabs():
+    """Stop every running bot at once. Returns the uids that were running."""
+    stopped = tiktok_runner.stop_all()
+    return jsonify({"ok": True, "stopped": stopped})
 
 
 @app.get("/api/tiktok/stream/<uid>")

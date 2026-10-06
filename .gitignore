@@ -17,3 +17,7 @@ web/dist/
 .DS_Store
 /dist/
 /build/
+
+# Chrome profiles used by the TikTok manager (CDP), one per debug Chrome, plus their registry
+data/chrome-cdp-profile*/
+data/chrome-cdp-instances.json

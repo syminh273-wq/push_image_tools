@@ -114,9 +114,23 @@ export type TikTokTab = {
   active: boolean
   logged_in: boolean
   state: TikTokTabState
+  /** "chrome" for a tab in a debug Chrome, "profile" for a saved account profile. */
+  source?: "chrome" | "profile"
+  /** Port of the debug Chrome the tab lives in (chrome source only). */
+  debug_port?: number
+  /** "#1", "#2"… for a debug Chrome this app launched, "ngoài" for one started by hand. */
+  chrome_label?: string
 }
 
-export type TikTokTabsResponse = { ok: boolean; tabs: TikTokTab[] }
+export type TikTokChrome = {
+  port: number
+  label: string
+  managed: boolean
+  alive: boolean
+  tabs: number
+}
+
+export type TikTokTabsResponse = { ok: boolean; tabs: TikTokTab[]; chromes: TikTokChrome[] }
 
 export type ModelImage = {
   id: string

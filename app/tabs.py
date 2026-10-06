@@ -5,12 +5,13 @@ Chrome — no Google sign-in required) and lists its open tabs. Used by the TikT
 to show every tab whose URL points at tiktok.com, mark which ones are logged in, and
 locate the Playwright Page object for the runner.
 
-Two connection modes are supported, tried in order:
-  1. Read DevToolsActivePort from ~/Library/Application Support/Google/Chrome and connect.
-  2. Try a few common CDP ports (9222, 9229) over ws://127.0.0.1.
+Each debug Chrome is its own endpoint, so the scan lists the tabs of every one of them and tags
+each tab with the port it came from. The runner uses that port to reach the right Chrome:
+  1. Every debug Chrome this app launched (data/chrome-cdp-instances.json).
+  2. A Chrome the user started by hand on one of DEFAULT_CDP_PORTS.
 
-Connection is async (Playwright async API). A single Playwright instance and CDP browser
-are reused across scans so we don't pay the connection cost on every poll. The browser
+Connection is async (Playwright async API). A single Playwright instance is shared, and one CDP
+connection is cached per port, so we don't pay the connection cost on every poll. The browser
 object is shared with the runner — when a tab is run, we hand the runner the existing
 Page so we don't reload anything.
 """
@@ -18,25 +19,23 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import threading
-import time
 from pathlib import Path
 from typing import Optional
 
 from playwright.async_api import Browser, Page, Playwright, async_playwright
 
-from .browser import CHROME_USER_DATA, start_chrome_with_debugging
+from .browser import add_debug_instance, load_debug_instances, port_in_use, start_chrome_with_debugging
 
 log = logging.getLogger("gemini_video_tool.tabs")
 
 TIKTOK_HOSTS = ("tiktok.com", "tiktokv.com", "musical.ly")
 
-# CDP ports tried when DevToolsActivePort is not present. Mirrors the ports Chrome itself
-# uses for its --remote-debugging-port flag.
+# Ports of a Chrome the user started with --remote-debugging-port, checked alongside the ones
+# this app launched. Mirrors the ports Chrome itself uses for its --remote-debugging-port flag.
 DEFAULT_CDP_PORTS = (9222, 9229)
 
-
-_chrome_proc_singleton: Optional[object] = None
+# Debug Chrome processes this app started. Kept referenced so the Popen objects are not dropped.
+_chrome_procs: list = []
 
 
 def _is_tiktok(url: str) -> bool:
@@ -46,85 +45,70 @@ def _is_tiktok(url: str) -> bool:
     return any(host in url for host in TIKTOK_HOSTS)
 
 
-async def _connect_once(pw: Playwright) -> Optional[Browser]:
-    """Try DevToolsActivePort first, then a couple of common CDP ports."""
-    port_file = CHROME_USER_DATA / "DevToolsActivePort"
-    if port_file.is_file():
+async def _connect_port(pw: Playwright, port: int) -> Optional[Browser]:
+    """Connect to the Chrome listening on `port`. Tries IPv4 loopback, then IPv6, since some
+    Chrome instances listen only on ::1. Returns None if neither answers."""
+    for host in ("127.0.0.1", "[::1]"):
+        endpoint = f"http://{host}:{port}"
         try:
-            port, ws_path = port_file.read_text().split()[:2]
-            return await pw.chromium.connect_over_cdp(f"ws://127.0.0.1:{port}{ws_path}")
+            return await pw.chromium.connect_over_cdp(endpoint)
         except Exception as e:
-            log.warning("CDP via port file failed: %s", e)
-    for port in DEFAULT_CDP_PORTS:
-        try:
-            return await pw.chromium.connect_over_cdp(f"http://127.0.0.1:{port}")
-        except Exception:
-            continue
+            log.debug("CDP at %s not usable: %s", endpoint, e)
     return None
 
 
+def debug_endpoints() -> list[dict]:
+    """Every debug Chrome to scan: the ones this app launched first (label "#<id>"), then the usual
+    external ports that are not already covered (label "ngoài")."""
+    out: list[dict] = []
+    for inst in load_debug_instances():
+        out.append({"port": inst["port"], "label": f"#{inst['id']}", "managed": True})
+    managed_ports = {e["port"] for e in out}
+    for port in DEFAULT_CDP_PORTS:
+        if port not in managed_ports:
+            out.append({"port": port, "label": "ngoài", "managed": False})
+    return out
+
+
 class ChromeConnector:
-    """Lazy singleton: one Playwright + one CDP browser for the whole Flask app."""
+    """Lazy singleton: one Playwright for the whole Flask app, one CDP browser per debug port."""
 
     def __init__(self) -> None:
         self._pw: Optional[Playwright] = None
-        self._browser: Optional[Browser] = None
-        self._lock = threading.Lock()
-        self._last_attempt = 0.0
-        self._fail_count = 0
+        self._browsers: dict[int, Browser] = {}
 
-    async def get_browser(self) -> Optional[Browser]:
-        """Return a live CDP browser or None. Tries to (re)connect if needed.
+    def connected_ports(self) -> set[int]:
+        return {port for port, b in self._browsers.items() if b.is_connected()}
+
+    async def get_browser(self, port: int) -> Optional[Browser]:
+        """Return a live CDP browser for `port`, or None. Connects if needed.
 
         Caller must not store the browser across awaits longer than a single request —
         the connection can drop when the user closes Chrome. Always go through this method.
         """
-        now = time.time()
-        if self._browser is not None:
-            try:
-                # Cheap liveness check — fails fast if Chrome was closed.
-                contexts = self._browser.contexts
-                _ = len(contexts)
-                # Reset fail counter on success
-                self._fail_count = 0
-                return self._browser
-            except Exception:
-                self._browser = None
-        # After repeated failures, drop the cached Playwright too — the underlying
-        # connection might be wedged. Throttle reconnect so we don't spam.
-        if now - self._last_attempt < 1.0 and self._browser is None:
-            return None
-        with self._lock:
-            self._last_attempt = now
-            if self._browser is not None:
-                return self._browser
-            if self._fail_count >= 2:
-                # Nuke the Playwright instance so the next attempt gets a fresh one.
-                log.info("CDP has failed %d times; resetting Playwright", self._fail_count)
-                if self._pw is not None:
-                    try:
-                        await self._pw.stop()
-                    except Exception:
-                        pass
-                    self._pw = None
-                self._fail_count = 0
-            if self._pw is None:
-                self._pw = await async_playwright().start()
-            self._browser = await _connect_once(self._pw)
-            if self._browser is None:
-                self._fail_count += 1
-                log.info("No Chrome with CDP found (attempt %d); user must enable "
-                         "remote debugging or run with --remote-debugging-port=9222",
-                         self._fail_count)
-            return self._browser
+        cached = self._browsers.get(port)
+        if cached is not None:
+            if cached.is_connected():
+                return cached
+            self._browsers.pop(port, None)
+        # No lock here: a threading.Lock held across this await could block the loop itself.
+        # Two concurrent connects to one port just leave one extra connection, which is harmless.
+        if self._pw is None:
+            self._pw = await async_playwright().start()
+        browser = await _connect_port(self._pw, port)
+        if browser is None:
+            log.debug("no Chrome answering CDP on port %d", port)
+        else:
+            self._browsers[port] = browser
+        return browser
 
     async def close(self) -> None:
-        if self._browser is not None:
+        for browser in self._browsers.values():
             try:
-                await self._browser.close()
+                await browser.close()
             except Exception:
                 pass
-            self._browser = None
+        self._browsers.clear()
         if self._pw is not None:
             try:
                 await self._pw.stop()
@@ -188,31 +172,6 @@ async def _active_tabs(browser: Browser) -> set[str]:
             except Exception:
                 pass
     return active_urls
-
-
-async def scan_tiktok_tabs() -> list[dict]:
-    """List Chrome tabs whose URL points at TikTok, with `active` and `logged_in`.
-
-    `logged_in` is heuristic: true if cookies for tiktok.com include a session token. The
-    runner rechecks this at run-time — the UI value is "is this tab probably usable right now".
-    """
-    browser = await connector.get_browser()
-    if browser is None:
-        return []
-    try:
-        tabs = await _list_tabs_via_cdp(browser)
-        active = await _active_tabs(browser)
-    except Exception as e:
-        log.warning("scan failed: %s", e)
-        return []
-    for t in tabs:
-        t["active"] = t["url"] in active
-        t["logged_in"] = await _is_logged_in(browser, t["url"])
-    # Stable id = a hash of the URL; collisions on two tabs of the same video are vanishingly
-    # rare in practice and the UI will just merge them.
-    for t in tabs:
-        t["uid"] = _tab_uid(t["url"])
-    return tabs
 
 
 async def _is_logged_in(browser: Browser, url: str) -> bool:
@@ -348,10 +307,10 @@ async def scan_tiktok_tabs() -> list[dict]:
     """
     seen: dict[str, dict] = {}
 
-    # 1. Live Chrome tabs.
-    local = await _scan_chrome_tabs()
-    for t in local:
-        seen[t["uid"]] = t
+    # 1. Live tabs of every debug Chrome.
+    for endpoint in debug_endpoints():
+        for t in await _scan_chrome_tabs(endpoint):
+            seen[t["uid"]] = t
 
     # 2. Account profiles with stored TikTok cookies.
     try:
@@ -367,33 +326,54 @@ async def scan_tiktok_tabs() -> list[dict]:
     return list(seen.values())
 
 
-async def _scan_chrome_tabs() -> list[dict]:
-    """Internal: scan only the live Chrome browser via CDP."""
-    browser = await connector.get_browser()
+async def _scan_chrome_tabs(endpoint: dict) -> list[dict]:
+    """Internal: scan the TikTok tabs of one debug Chrome (an entry from debug_endpoints())."""
+    port = endpoint["port"]
+    browser = await connector.get_browser(port)
     if browser is None:
         return []
     try:
         tabs = await _list_tabs_via_cdp(browser)
         active = await _active_tabs(browser)
     except Exception as e:
-        log.warning("scan failed: %s", e)
+        log.warning("scan of Chrome on port %d failed: %s", port, e)
         return []
     for t in tabs:
         t["active"] = t["url"] in active
         t["logged_in"] = await _is_logged_in(browser, t["url"])
         t["source"] = "chrome"
-    for t in tabs:
-        t["uid"] = _tab_uid(t["url"])
+        t["debug_port"] = port
+        t["chrome_label"] = endpoint["label"]
+        t["uid"] = _tab_uid(port, t["url"])
     return tabs
 
 
-def _tab_uid(url: str) -> str:
-    """Stable id for a tab = a short hash of its URL. Chrome itself does not expose a stable
-    tab id via the standard Playwright Page object for connected browsers, so we use URL.
-    Collisions only happen if the user has the same video open in two tabs — UI then merges
-    them which is acceptable for v1."""
+def debug_chromes(tabs_list: list[dict]) -> list[dict]:
+    """Status of each debug Chrome for the UI header, from the last scan. Chromes this app
+    launched are always listed (so a closed one shows as off); external ones only when reachable."""
+    connected = connector.connected_ports()
+    out = []
+    for endpoint in debug_endpoints():
+        port = endpoint["port"]
+        alive = port in connected
+        if not endpoint["managed"] and not alive:
+            continue
+        out.append({
+            "port": port,
+            "label": endpoint["label"],
+            "managed": endpoint["managed"],
+            "alive": alive,
+            "tabs": sum(1 for t in tabs_list if t.get("debug_port") == port),
+        })
+    return out
+
+
+def _tab_uid(port: int, url: str) -> str:
+    """Stable id for a tab = a short hash of its Chrome's port and its URL. The port is part of
+    the key so the same video open in two debug Chromes stays two separate tabs. Chrome itself
+    does not expose a stable tab id via Playwright for connected browsers, so we use the URL."""
     import hashlib
-    return "tt_" + hashlib.sha1(url.encode("utf-8")).hexdigest()[:10]
+    return "tt_" + hashlib.sha1(f"{port}|{url}".encode("utf-8")).hexdigest()[:10]
 
 
 def _extract_tiktok_id(url: str) -> str:
@@ -436,22 +416,33 @@ async def find_page_by_url(browser: Browser, url: str) -> Optional[Page]:
     return None
 
 
-async def ensure_chrome_running(debug_port: int = 9222) -> bool:
-    """Best-effort: if no CDP endpoint responds, launch a Chrome with debugging enabled
-    on debug_port so the user can manually open TikTok tabs. Returns True if Chrome is up."""
-    browser = await connector.get_browser()
-    if browser is not None:
-        return True
-    try:
-        proc = start_chrome_with_debugging(port=debug_port)
-        global _chrome_proc_singleton
-        _chrome_proc_singleton = proc
-    except Exception as e:
-        log.warning("failed to launch Chrome: %s", e)
-        return False
-    # Wait for DevToolsActivePort to appear so connect_over_cdp will succeed.
+async def launch_debug_chrome() -> dict:
+    """Open a new debug Chrome with its own port and profile, and connect to it.
+
+    Every call opens another window, so several debug Chromes can run side by side, each with its
+    own TikTok login. Returns the new instance as {"id", "port", "profile_dir", "label"}.
+    Raises ConnectionError if the window does not come up with CDP in time.
+    """
+    inst = add_debug_instance()
+    proc = start_chrome_with_debugging(port=inst["port"], user_data_dir=Path(inst["profile_dir"]))
+    _chrome_procs.append(proc)
+    # Wait until the new Chrome is listening so connect_over_cdp will succeed.
     for _ in range(40):
         await asyncio.sleep(0.25)
-        if (CHROME_USER_DATA / "DevToolsActivePort").is_file():
+        if proc.poll() is not None:
+            raise ConnectionError(f"Chrome #{inst['id']} đã thoát ngay sau khi mở")
+        if port_in_use(inst["port"]):
             break
-    return await connector.get_browser() is not None
+    else:
+        raise ConnectionError(f"Chrome #{inst['id']} chưa mở cổng CDP {inst['port']} sau 10 giây")
+    browser = await connector.get_browser(inst["port"])
+    if browser is None:
+        raise ConnectionError(f"Chrome #{inst['id']} đã mở nhưng chưa kết nối được CDP")
+    # Bring the new window to the front, so it shows up on top instead of behind other windows.
+    try:
+        ctx = browser.contexts[0]
+        page = ctx.pages[0] if ctx.pages else await ctx.new_page()
+        await page.bring_to_front()
+    except Exception as e:
+        log.warning("could not bring Chrome #%d to front: %r", inst["id"], e)
+    return {**inst, "label": f"#{inst['id']}"}

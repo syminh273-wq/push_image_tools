@@ -4,6 +4,7 @@ import {
   CheckCircle2Icon,
   CircleDotIcon,
   ExternalLinkIcon,
+  GlobeIcon,
   HashIcon,
   Loader2Icon,
   MessageSquareIcon,
@@ -38,7 +39,11 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
-import { api, type TikTokTab, type TikTokTabsResponse } from "@/lib/api"
+import { api, type TikTokChrome, type TikTokTab, type TikTokTabsResponse } from "@/lib/api"
+
+// The desktop build is TikTok-only and ships with its own Chrome launcher; the web build
+// expects the user to start Chrome with remote debugging themselves.
+const IS_DESKTOP = import.meta.env.VITE_APP_MODE === "tiktok"
 
 const DEFAULT_TEMPLATES = [
   "chắc k có ai để ý",
@@ -52,20 +57,22 @@ function templateKey(t: TikTokTab) {
 
 /** Always-on SSE subscriber for a single tab. Renders nothing.
  *  Used so each running card can show live counters + a rolling mini-log
- *  without the user opening the Log dialog. */
+ *  without the user opening the Log dialog. The server replays the buffered
+ *  lines on connect, so the local buffer is reset first to avoid duplicates. */
 function LiveSse({
   uid,
   onState,
   onLog,
-  onStopped,
+  onReset,
 }: {
   uid: string
   onState: (uid: string, state: Record<string, unknown>) => void
   onLog: (uid: string, line: string) => void
-  onStopped: (uid: string) => void
+  onReset: (uid: string) => void
 }) {
   const ref = useRef<EventSource | null>(null)
   useEffect(() => {
+    onReset(uid)
     const es = new EventSource(`/api/tiktok/stream/${uid}`)
     ref.current = es
     es.addEventListener("log", (e) => {
@@ -78,14 +85,13 @@ function LiveSse({
       try {
         const data = JSON.parse((e as MessageEvent).data) as Record<string, unknown>
         onState(uid, data)
-        if (data.is_running === false) onStopped(uid)
       } catch {}
     })
     return () => {
       es.close()
       ref.current = null
     }
-  }, [uid, onState, onLog, onStopped])
+  }, [uid, onState, onLog, onReset])
   return null
 }
 
@@ -255,6 +261,18 @@ function TabCard({
   return (
     <Card className="flex flex-col">
       <CardHeader>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {tab.source === "chrome" ? (
+            <Badge variant="outline" className="gap-1">
+              <GlobeIcon className="size-3" aria-hidden /> debug web {tab.chrome_label}
+              {tab.debug_port ? <span className="font-mono text-[10px] text-muted-foreground">:{tab.debug_port}</span> : null}
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="gap-1">
+              <VideoIcon className="size-3" aria-hidden /> profile
+            </Badge>
+          )}
+        </div>
         <div className="flex items-start justify-between gap-2">
           <div className="flex min-w-0 flex-col gap-1">
             <CardDescription className="flex items-center gap-1.5">
@@ -432,6 +450,7 @@ function LogPanel({
 
 export function TikTokPage() {
   const [tabs, setTabs] = useState<TikTokTab[] | null>(null)
+  const [chromes, setChromes] = useState<TikTokChrome[]>([])
   const [loading, setLoading] = useState(true)
   const [dialogTab, setDialogTab] = useState<TikTokTab | null>(null)
   const [logUid, setLogUid] = useState<string | null>(null)
@@ -443,6 +462,7 @@ export function TikTokPage() {
     try {
       const data = await api<TikTokTabsResponse>("/api/tiktok/tabs")
       setTabs(data.tabs)
+      setChromes(data.chromes ?? [])
     } catch (e) {
       toast.error((e as Error).message)
     } finally {
@@ -466,13 +486,10 @@ export function TikTokPage() {
     })
   }, [])
 
-  // Clear the mini-log for a tab once the run stops — keeps the strip tidy.
-  const clearMiniLog = useCallback((uid: string) => {
-    setLinesByUid((prev) => {
-      if (!prev[uid] || prev[uid].length === 0) return prev
-      const { [uid]: _, ...rest } = prev
-      return rest
-    })
+  // Start a bot's log buffer from empty when its stream (re)connects. Logs are kept after a
+  // run stops, so the user can still read both bots' output; only the Xóa button removes them.
+  const resetLog = useCallback((uid: string) => {
+    setLinesByUid((prev) => ({ ...prev, [uid]: [] }))
   }, [])
 
   // Merge a live SSE state snapshot into the matching tab so the cards show
@@ -538,6 +555,11 @@ export function TikTokPage() {
     [refresh],
   )
 
+  const logTabs = useMemo(
+    () => (tabs ?? []).filter((t) => (linesByUid[t.uid] ?? []).length > 0 || t.state.is_running),
+    [tabs, linesByUid],
+  )
+
   const summary = useMemo(() => {
     const all = tabs ?? []
     return {
@@ -569,10 +591,56 @@ export function TikTokPage() {
           <Badge variant="outline" className="gap-1.5">
             <PowerIcon className="size-3" /> {summary.running} đang chạy
           </Badge>
+          {chromes.map((c) => (
+            <Badge key={c.port} variant={c.alive ? "secondary" : "outline"} className="gap-1.5">
+              <GlobeIcon className="size-3" /> debug web {c.label}
+              <span className="font-mono text-[10px] text-muted-foreground">:{c.port}</span>
+              {c.alive ? `· ${c.tabs} tab` : "· đã tắt"}
+            </Badge>
+          ))}
+          <Button
+            variant="destructive"
+            size="sm"
+            disabled={summary.running === 0}
+            onClick={async () => {
+              try {
+                const r = await api<{ ok: boolean; stopped: string[] }>("/api/tiktok/stop-all", { method: "POST" })
+                toast.success(r.stopped.length ? `Đã dừng ${r.stopped.length} bot` : "Không có bot nào đang chạy")
+                await refresh()
+              } catch (e) {
+                toast.error((e as Error).message)
+              }
+            }}
+          >
+            <StopCircleIcon data-icon="inline-start" /> Dừng tất cả
+          </Button>
           <Button variant="outline" size="sm" onClick={refresh} disabled={loading}>
             <RefreshCwIcon className={loading ? "animate-spin" : undefined} data-icon="inline-start" />
             Quét lại
           </Button>
+          {IS_DESKTOP && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                try {
+                  const r = await api<{ ok: boolean; chrome?: { label: string; port: number } }>(
+                    "/api/tiktok/chrome/start",
+                    { method: "POST" },
+                  )
+                  const where = r.chrome ? ` ${r.chrome.label} (cổng ${r.chrome.port})` : ""
+                  toast.success(
+                    `Đã mở debug web${where}. Đăng nhập TikTok trong cửa sổ đó rồi bấm Quét lại.`,
+                  )
+                  await refresh()
+                } catch (e) {
+                  toast.error((e as Error).message)
+                }
+              }}
+            >
+              <ExternalLinkIcon data-icon="inline-start" /> Mở Chrome debug
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="sm"
@@ -619,7 +687,11 @@ export function TikTokPage() {
         <EmptyState
           icon={VideoIcon}
           title="Chưa có tab TikTok nào"
-          description="Mở TikTok trong Chrome (bật remote debugging: chạy Chrome với --remote-debugging-port=9222), rồi bấm Quét lại."
+          description={
+            IS_DESKTOP
+              ? "Bấm “Mở Chrome debug”, mở tiktok.com/…/video/… trong cửa sổ Chrome đó và đăng nhập, rồi bấm Quét lại."
+              : "Mở tiktok.com/…/video/… trong Chrome đang bật remote debugging (cổng 9222), rồi bấm Quét lại."
+          }
         />
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -634,6 +706,39 @@ export function TikTokPage() {
         </div>
       )}
 
+      {logTabs.length > 0 ? (
+        <section className="flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-medium">Log các bot</h2>
+            <Button variant="ghost" size="sm" onClick={() => setLinesByUid({})}>
+              <XCircleIcon data-icon="inline-start" /> Xóa log
+            </Button>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            {logTabs.map((t) => (
+              <Card key={t.uid}>
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-sm">
+                    <span className="line-clamp-1 min-w-0">{t.title || t.uid}</span>
+                    {t.chrome_label ? <Badge variant="outline">{t.chrome_label}</Badge> : null}
+                    {t.state.is_running ? <Badge variant="default">đang chạy</Badge> : null}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ScrollArea className="h-56 rounded-md border bg-muted/40 p-3 font-mono text-xs">
+                    {(linesByUid[t.uid] ?? []).map((l, i) => (
+                      <div key={l.ts + "-" + i} className="whitespace-pre-wrap break-all">
+                        {l.line}
+                      </div>
+                    ))}
+                  </ScrollArea>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       <RunDialog open={!!dialogTab} onOpenChange={(v) => !v && setDialogTab(null)} tab={dialogTab} onRun={handleRun} />
       <LogPanel uid={logUid} open={!!logUid} onClose={() => setLogUid(null)} onLiveState={handleLiveState} />
 
@@ -644,7 +749,7 @@ export function TikTokPage() {
           uid={t.uid}
           onState={handleLiveState}
           onLog={handleLiveLog}
-          onStopped={(uid) => clearMiniLog(uid)}
+          onReset={resetLog}
         />
       ))}
     </div>

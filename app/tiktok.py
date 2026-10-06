@@ -190,7 +190,7 @@ class TikTokAutomation:
         Combines several signals so it survives TikTok's DOM rewrites:
           - page.url (changes when user navigates to a single video)
           - src of the largest visible <video>
-          - currentTime of that <video>
+          (currentTime is left out: it moves while a video plays, so it looks like a new video)
           - text/attributes of any element marked "active feed item" / current
         Anything that throws returns '' so the signature degrades gracefully.
         """
@@ -210,7 +210,6 @@ class TikTokAutomation:
                         if (area > bestArea) { best = v; bestArea = area; }
                     }
                     const src = best ? (best.src || best.currentSrc || '') : '';
-                    const cur = best ? (best.currentTime || 0).toFixed(2) : '';
                     // Active feed-item marker — TikTok uses several class/data combos
                     // across versions, so probe a few.
                     const selectors = [
@@ -243,16 +242,29 @@ class TikTokAutomation:
                         }
                         activeHash = topSig;
                     }
-                    return { src: src.slice(-120), cur, activeHash: String(activeHash).slice(0, 80) };
+                    return { src: src.slice(-120), activeHash: String(activeHash).slice(0, 80) };
                 }"""
             )
         except Exception:
             return (url, "", "", "")
         if not isinstance(data, dict):
             return (url, "", "", "")
-        return (url, data.get("src", ""), data.get("cur", ""), data.get("activeHash", ""))
+        return (url, data.get("src", ""), data.get("activeHash", ""))
 
     # ---- comments ----
+
+    async def video_key(self) -> str:
+        """Identifies the video in view so the same post is never commented twice.
+
+        A single-video page has its id in the URL. On the For You feed the URL stays the same, so
+        the video's source identifies it instead. Returns "" if neither can be read.
+        """
+        m = re.search(r"/(?:video|photo)/(\d+)", self.page.url or "")
+        if m:
+            return "id:" + m.group(1)
+        _, src, active = await self._video_signature()
+        key = f"{src}|{active}"
+        return key if key != "|" else ""
 
     async def is_login_wall(self) -> bool:
         try:

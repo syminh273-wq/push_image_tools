@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import logging
+import socket
 import subprocess
 import time
 from pathlib import Path
@@ -8,7 +10,7 @@ from pathlib import Path
 from playwright.async_api import Browser, BrowserContext, Playwright
 
 from .models import ACCOUNTS_DIR
-from .paths import CHROME_USER_DATA
+from .paths import CDP_INSTANCES_FILE, CDP_PORT_FILE, CDP_PROFILE_DIR
 
 log = logging.getLogger(__name__)
 
@@ -36,22 +38,91 @@ def _chrome_binary() -> str:
     return "google-chrome"
 
 
-def start_chrome_with_debugging(port: int = 9222,
-                                user_data_dir: Path | None = None) -> subprocess.Popen:
+def port_in_use(port: int) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        return s.connect_ex(("127.0.0.1", port)) == 0
+
+
+def _free_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+def load_debug_instances() -> list[dict]:
+    """Debug Chrome instances this app launched: [{"id", "port", "profile_dir"}, ...].
+
+    Instances stay listed after their window is closed, so a relaunch can be told apart from a
+    fresh one. An install that predates the registry adopts the single Chrome it recorded in
+    cdp_port.txt, so a Chrome that is still running keeps being found.
+    """
+    try:
+        items = json.loads(CDP_INSTANCES_FILE.read_text(encoding="utf-8")).get("instances", [])
+        return [i for i in items if isinstance(i, dict) and "port" in i and "id" in i]
+    except FileNotFoundError:
+        pass
+    except (OSError, ValueError):
+        log.warning("cannot read %s; ignoring it", CDP_INSTANCES_FILE)
+        return []
+    try:
+        legacy_port = int(CDP_PORT_FILE.read_text().strip())
+    except (OSError, ValueError):
+        return []
+    items = [{"id": 1, "port": legacy_port, "profile_dir": str(CDP_PROFILE_DIR)}]
+    _save_debug_instances(items)
+    return items
+
+
+def _save_debug_instances(items: list[dict]) -> None:
+    CDP_INSTANCES_FILE.parent.mkdir(parents=True, exist_ok=True)
+    CDP_INSTANCES_FILE.write_text(json.dumps({"instances": items}, indent=2), encoding="utf-8")
+
+
+def add_debug_instance() -> dict:
+    """Reserve a new debug Chrome: its own port and its own profile dir.
+
+    Chrome given an existing --user-data-dir hands the launch to the running process and exits,
+    so every instance needs a profile of its own. Instance 1 keeps the original profile, so the
+    TikTok logins from before this change still apply.
+    """
+    items = load_debug_instances()
+    new_id = max((i["id"] for i in items), default=0) + 1
+    used_ports = {i["port"] for i in items}
+    if 9222 not in used_ports and not port_in_use(9222):
+        port = 9222
+    else:
+        port = _free_port()
+        while port in used_ports:
+            port = _free_port()
+    profile_dir = CDP_PROFILE_DIR if new_id == 1 else CDP_PROFILE_DIR.with_name(f"chrome-cdp-profile-{new_id}")
+    inst = {"id": new_id, "port": port, "profile_dir": str(profile_dir)}
+    items.append(inst)
+    _save_debug_instances(items)
+    return inst
+
+
+def start_chrome_with_debugging(port: int,
+                                user_data_dir: Path) -> subprocess.Popen:
     """Start a dedicated Chrome instance with CDP enabled and NO origin prompt.
 
     Flags:
       --remote-debugging-port=<port>           enable CDP
+      --user-data-dir=<dir>                    required: Chrome 136+ ignores the debug port on
+                                               the default profile, and an already-running
+                                               Chrome would hand off the launch and exit
       --remote-allow-origins=*                 accept connection from any origin
                                                (no "Allow debugging" dialog)
       --no-first-run / --no-default-browser-check  silent startup
       --disable-blink-features=AutomationControlled  hide "controlled by automated software"
 
-    Returns the Popen handle so the caller can keep it alive or kill it later.
+    The caller picks a free port and profile (see add_debug_instance). Returns the Popen handle
+    so the caller can keep it alive or kill it later.
     """
+    user_data_dir.mkdir(parents=True, exist_ok=True)
     args = [
         _chrome_binary(),
         f"--remote-debugging-port={port}",
+        f"--user-data-dir={user_data_dir}",
         "--remote-allow-origins=*",
         "--no-first-run",
         "--no-default-browser-check",
@@ -59,9 +130,6 @@ def start_chrome_with_debugging(port: int = 9222,
         "--no-sandbox",
         "--disable-dev-shm-usage",
     ]
-    if user_data_dir is not None:
-        user_data_dir.mkdir(parents=True, exist_ok=True)
-        args.append(f"--user-data-dir={user_data_dir}")
     log.info("Starting Chrome: %s", " ".join(args))
     return subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
@@ -118,38 +186,35 @@ async def launch_attach_profile(pw: Playwright, headless: bool = False) -> Brows
     return await launch_profile(pw, "__attach__", channel="chrome", headless=headless)
 
 
-async def connect_running_chrome(pw: Playwright, auto_start: bool = True,
-                                 debug_port: int = 9222) -> Browser:
+async def connect_running_chrome(pw: Playwright, auto_start: bool = True) -> Browser:
     """Connect to Chrome over CDP without an "Allow" prompt.
 
-    If Chrome isn't already running with the right flags, starts a dedicated instance
-    on debug_port using start_chrome_with_debugging() — the user does not need to
+    Connects to the first debug Chrome from the instance registry that is listening. If none is,
+    starts a new instance with start_chrome_with_debugging() — the user does not need to
     manually enable chrome://inspect/#remote-debugging or click any dialog.
     """
-    port_file = CHROME_USER_DATA / "DevToolsActivePort"
-    chrome_proc: subprocess.Popen | None = None
+    port = next((i["port"] for i in load_debug_instances() if port_in_use(i["port"])), None)
 
-    if not port_file.is_file() and auto_start:
-        log.info("No Chrome with remote debugging — starting a fresh instance on port %d", debug_port)
-        chrome_proc = start_chrome_with_debugging(port=debug_port)
-        # Wait until DevToolsActivePort appears (Chrome writes it when ready).
+    if port is None and auto_start:
+        log.info("No Chrome with remote debugging — starting a fresh instance")
+        inst = add_debug_instance()
+        chrome_proc = start_chrome_with_debugging(port=inst["port"], user_data_dir=Path(inst["profile_dir"]))
+        # Wait until the launched Chrome is listening on the port it was given.
         for _ in range(40):
-            if port_file.is_file():
-                break
             time.sleep(0.25)
-        if not port_file.is_file():
+            if port_in_use(inst["port"]):
+                port = inst["port"]
+                break
+        else:
             chrome_proc.terminate()
-            raise FileNotFoundError(
-                f"Chrome did not expose DevToolsActivePort at {port_file} within 10s"
-            )
+            raise ConnectionError(f"Chrome did not expose CDP on port {inst['port']} within 10s")
 
-    if not port_file.is_file():
-        raise FileNotFoundError(
-            "Chrome remote debugging is off. Open chrome://inspect/#remote-debugging in Chrome "
-            "and enable 'Allow remote debugging for this browser instance'."
+    if port is None:
+        raise ConnectionError(
+            "Chrome remote debugging is off. Open a debug Chrome from the TikTok manager, or start "
+            "Chrome with --remote-debugging-port."
         )
 
-    port, ws_path = port_file.read_text().split()[:2]
-    endpoint = f"ws://127.0.0.1:{port}{ws_path}"
+    endpoint = f"http://127.0.0.1:{port}"
     log.debug("Connecting to running Chrome at %s", endpoint)
     return await pw.chromium.connect_over_cdp(endpoint)
