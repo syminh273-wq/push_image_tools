@@ -24,7 +24,21 @@ const PAGES: Record<Page, { title: string; render: () => React.ReactNode }> = {
   tiktok: { title: "TikTok manager", render: () => <TikTokPage /> },
 }
 
+// The desktop build (npm run build:desktop) ships only the TikTok manager.
+const TIKTOK_ONLY = import.meta.env.VITE_APP_MODE === "tiktok"
+
 export default function App() {
+  if (TIKTOK_ONLY) {
+    return (
+      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 md:px-8 md:py-8">
+        <TikTokPage />
+      </main>
+    )
+  }
+  return <FullApp />
+}
+
+function FullApp() {
   const { page } = useRoute()
   const current = PAGES[page]
   return (

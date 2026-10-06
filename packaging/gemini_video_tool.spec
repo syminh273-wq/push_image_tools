@@ -23,5 +23,6 @@ a = Analysis(
     hiddenimports=collect_submodules("app") + (["keyring.backends.Windows"] if sys.platform == "win32" else []),
 )
 pyz = PYZ(a.pure)
-exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name="GeminiVideoTool", console=True)
+# No console window on Windows: the app opens in its own pywebview window.
+exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name="GeminiVideoTool", console=sys.platform != "win32")
 coll = COLLECT(exe, a.binaries, a.datas, name="GeminiVideoTool")

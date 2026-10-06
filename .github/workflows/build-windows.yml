@@ -36,24 +36,27 @@ jobs:
 
       - name: Smoke test (start the exe and load the UI)
         env:
-          NO_BROWSER: "1"
+          NO_WINDOW: "1"
           PORT: "5050"
         run: |
-          $p = Start-Process -FilePath dist/GeminiVideoTool/GeminiVideoTool.exe -PassThru `
-                 -RedirectStandardOutput out.log -RedirectStandardError err.log
+          $p = Start-Process -FilePath dist/GeminiVideoTool/GeminiVideoTool.exe -PassThru
           $ok = $false
           for ($i = 0; $i -lt 60 -and -not $ok; $i++) {
             Start-Sleep -Seconds 1
             try { $ok = (Invoke-WebRequest http://127.0.0.1:5050/ -UseBasicParsing -TimeoutSec 2).StatusCode -eq 200 } catch {}
             if ($p.HasExited) { break }
           }
-          Get-Content out.log, err.log -ErrorAction SilentlyContinue
+          $logs = "dist/GeminiVideoTool/GeminiVideoTool.log", "dist/GeminiVideoTool/GeminiVideoTool-error.log"
+          Get-Content $logs -ErrorAction SilentlyContinue
+          $tail = (Get-Content $logs -Tail 15 -ErrorAction SilentlyContinue) -join '%0A'
           if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force }
+          Start-Sleep -Seconds 1
+          Remove-Item $logs -ErrorAction SilentlyContinue
           if (-not $ok) {
-            $tail = (Get-Content err.log -Tail 15 -ErrorAction SilentlyContinue) -join '%0A'
             Write-Output "::error title=exe did not start::$tail"
             exit 1
           }
+          Write-Output "::notice title=exe log::$tail"
 
       - uses: actions/upload-artifact@v4
         with:
