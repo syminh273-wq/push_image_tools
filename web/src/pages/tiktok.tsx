@@ -118,7 +118,7 @@ function RunDialog({
   open: boolean
   onOpenChange: (v: boolean) => void
   tab: TikTokTab | null
-  onRun: (cfg: { templates: string[]; videoUrl: string; dwell: number; max: number; scroll: boolean; headless: boolean }) => Promise<void>
+  onRun: (cfg: { templates: string[]; videoUrl: string; keywords: string[]; dwell: number; max: number; scroll: boolean; headless: boolean }) => Promise<void>
 }) {
   const [templates, setTemplates] = useState<string>("")
   const [videoUrl, setVideoUrl] = useState<string>("")
@@ -126,6 +126,7 @@ function RunDialog({
   const [max, setMax] = useState<number>(20)
   const [scroll, setScroll] = useState<boolean>(true)
   const [headless, setHeadless] = useState<boolean>(false)
+  const [keywords, setKeywords] = useState<string>("")
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
@@ -136,6 +137,7 @@ function RunDialog({
       setMax(20)
       setScroll(true)
       setHeadless(false)
+      setKeywords("")
     }
   }, [open, tab?.uid])
 
@@ -150,7 +152,8 @@ function RunDialog({
     }
     setBusy(true)
     try {
-      await onRun({ templates: list, videoUrl: videoUrl.trim(), dwell, max, scroll, headless })
+      const keywordList = keywords.split(/[,\n]/).map((k) => k.trim()).filter(Boolean)
+      await onRun({ templates: list, videoUrl: videoUrl.trim(), keywords: keywordList, dwell, max, scroll, headless })
       onOpenChange(false)
     } finally {
       setBusy(false)
@@ -185,6 +188,18 @@ function RunDialog({
               onChange={(e) => setVideoUrl(e.target.value)}
               placeholder="https://www.tiktok.com/@user/video/... — bỏ trống để chạy feed For You"
             />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="tiktok-keywords">Từ khóa lọc (tùy chọn)</Label>
+            <Input
+              id="tiktok-keywords"
+              value={keywords}
+              onChange={(e) => setKeywords(e.target.value)}
+              placeholder="chéo follow, tương tác — mỗi cụm cách nhau dấu phẩy"
+            />
+            <span className="text-xs text-muted-foreground">
+              Chỉ comment video có mô tả chứa đủ các từ trong một cụm (không phân biệt hoa thường, dấu). Bỏ trống để comment mọi video.
+            </span>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-2">
@@ -518,7 +533,7 @@ export function TikTokPage() {
   }, [])
 
   const handleRun = useCallback(
-    async (cfg: { templates: string[]; videoUrl: string; dwell: number; max: number; scroll: boolean; headless: boolean }) => {
+    async (cfg: { templates: string[]; videoUrl: string; keywords: string[]; dwell: number; max: number; scroll: boolean; headless: boolean }) => {
       if (!dialogTab) return
       try {
         await api(`/api/tiktok/tabs/${dialogTab.uid}/run`, {
@@ -530,6 +545,7 @@ export function TikTokPage() {
             max_comments: cfg.max,
             scroll_after_each: cfg.scroll,
             headless: cfg.headless,
+            keywords: cfg.keywords,
           },
         })
         toast.success(cfg.headless ? "Bot đã bắt đầu (chạy ngầm) — xem log để theo dõi" : "Bot đã bắt đầu — xem log để theo dõi")

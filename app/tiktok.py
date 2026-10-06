@@ -253,6 +253,25 @@ class TikTokAutomation:
 
     # ---- comments ----
 
+    async def description(self) -> str:
+        """Text of the video in view (its caption and hashtags). "" if it cannot be read.
+
+        The page keeps the captions of earlier videos in the DOM, so only the one inside the
+        viewport counts.
+        """
+        try:
+            return await self.page.evaluate(
+                """() => {
+                    for (const el of document.querySelectorAll('[data-e2e="video-desc"]')) {
+                        const r = el.getBoundingClientRect();
+                        if (r.bottom > 0 && r.top < window.innerHeight) return el.innerText || '';
+                    }
+                    return '';
+                }"""
+            )
+        except Exception:
+            return ""
+
     async def video_key(self) -> str:
         """Identifies the video in view so the same post is never commented twice.
 

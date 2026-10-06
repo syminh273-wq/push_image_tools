@@ -36,6 +36,32 @@ _running: dict[str, dict] = {}
 # Videos any bot has already commented on this session, shared by all runs so two bots (or two
 # debug Chromes) never comment the same post twice.
 _commented: set[str] = set()
+
+
+def _fold(text: str) -> str:
+    """Lowercase, drop accents and everything that is not a letter or digit, so "chéo" matches
+    "cheo" and "#followcheo" matches "follow cheo"."""
+    import unicodedata
+    decomposed = unicodedata.normalize("NFD", text.lower())
+    no_marks = "".join(c for c in decomposed if unicodedata.category(c) != "Mn")
+    return "".join(c for c in no_marks if c.isalnum())
+
+
+def matches_keywords(description: str, keywords: list[str]) -> bool:
+    """True if the description contains every word of at least one keyword phrase.
+
+    "chéo follow" matches a caption that has both "cheo" and "follow" somewhere in it, in any
+    order, so "#followcheo" counts.
+    """
+    if not keywords:
+        return True
+    text = _fold(description)
+    for phrase in keywords:
+        words = [_fold(w) for w in phrase.split()]
+        words = [w for w in words if w]
+        if words and all(w in text for w in words):
+            return True
+    return False
 # tab_uid -> list of queue.Queue for SSE subscribers.
 _subs: dict[str, list[queue.Queue]] = {}
 # tab_uid -> log buffer (last 200 lines).
@@ -132,7 +158,8 @@ async def _run_loop(tab: dict, video_url: Optional[str], templates: list[str],
                     dwell_s: float, max_comments: int, scroll_after_each: bool,
                     cooldown_s: float, skip_first: int,
                     headless: bool,
-                    stop_event: asyncio.Event) -> None:
+                    stop_event: asyncio.Event,
+                    keywords: Optional[list[str]] = None) -> None:
     uid = tab["uid"]
     owned_browser: Optional[Browser] = None
     # If the tab came from an account profile (not a live Chrome tab), force
@@ -205,8 +232,13 @@ async def _run_loop(tab: dict, video_url: Optional[str], templates: list[str],
                 _append_log(uid, f"[runner] opening {video_url}")
                 await automation.open_or_focus(video_url)
             else:
-                _append_log(uid, "[runner] opening For You feed")
-                await automation.open_or_focus("https://www.tiktok.com/foryou")
+                # No link given: keep running on the page the tab is already showing (a search
+                # page, a feed, a video) instead of jumping to For You.
+                _append_log(uid, f"[runner] chạy ở trang hiện tại: {page.url}")
+                try:
+                    await page.bring_to_front()
+                except Exception:
+                    pass
         _update_state(uid, is_running=True, started_at=_now(),
                       last_error=None, current_video=page.url)
 
@@ -237,6 +269,15 @@ async def _run_loop(tab: dict, video_url: Optional[str], templates: list[str],
             # "warm up" before commenting.
             if videos_seen <= skip_first:
                 _append_log(uid, f"[runner] skipping video {videos_seen}/{skip_first} (no comment)")
+                if scroll_after_each and sent < max_comments:
+                    moved = await automation.scroll_feed()
+                    if not moved:
+                        _append_log(uid, "[runner] could not scroll to next video, stopping")
+                        break
+                continue
+
+            if keywords and not matches_keywords(await automation.description(), keywords):
+                _append_log(uid, f"[runner] video không khớp từ khóa {keywords} — bỏ qua")
                 if scroll_after_each and sent < max_comments:
                     moved = await automation.scroll_feed()
                     if not moved:
@@ -335,8 +376,12 @@ async def _run_loop(tab: dict, video_url: Optional[str], templates: list[str],
 def start_run(*, tab: dict, video_url: Optional[str], templates: list[str],
               dwell_s: float, max_comments: int, scroll_after_each: bool,
               cooldown_s: float = 12.0, skip_first: int = 0,
-              headless: bool = False) -> dict:
-    """Start a background run for `tab`. If one is already running, returns its state."""
+              headless: bool = False, keywords: Optional[list[str]] = None) -> dict:
+    """Start a background run for `tab`. If one is already running, returns its state.
+
+    `keywords` limits comments to videos whose caption matches (see matches_keywords). Empty or
+    None comments on every video.
+    """
     uid = tab["uid"]
     with _lock:
         existing = _running.get(uid)
@@ -375,7 +420,8 @@ def start_run(*, tab: dict, video_url: Optional[str], templates: list[str],
             stop_coro = asyncio.ensure_future(watcher())
             run_task = asyncio.ensure_future(_run_loop(
                 tab, video_url, templates, dwell_s, max_comments,
-                scroll_after_each, cooldown_s, skip_first, headless, stop_event))
+                scroll_after_each, cooldown_s, skip_first, headless, stop_event,
+                keywords))
             try:
                 # Whichever finishes first, wait for the other to settle and cancel
                 # it if still running. Without this, a stuck Playwright operation can

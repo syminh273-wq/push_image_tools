@@ -1104,6 +1104,13 @@ def list_tiktok_profiles():
     ]})
 
 
+def _keyword_list(raw) -> list[str]:
+    """Keyword phrases from the UI: a list, or one string split on commas and new lines."""
+    if isinstance(raw, str):
+        raw = raw.replace("\n", ",").split(",")
+    return [str(k).strip() for k in (raw or []) if str(k).strip()]
+
+
 @app.post("/api/tiktok/tabs/<uid>/run")
 def run_tiktok_tab(uid: str):
     """Start a bot on the tab. Body:
@@ -1156,6 +1163,7 @@ def run_tiktok_tab(uid: str):
         cooldown_s=float(body.get("cooldown_seconds") or 3),
         skip_first=int(body.get("skip_first") or 0),
         headless=headless_requested,
+        keywords=_keyword_list(body.get("keywords")),
     )
     return jsonify({"ok": True, "state": state})
     """Start a bot on the tab. Body:
@@ -1203,6 +1211,7 @@ def run_tiktok_tab(uid: str):
         cooldown_s=float(body.get("cooldown_seconds") or 3),
         skip_first=int(body.get("skip_first") or 0),
         headless=bool(body.get("headless", False)),
+        keywords=_keyword_list(body.get("keywords")),
     )
     return jsonify({"ok": True, "state": state})
 
