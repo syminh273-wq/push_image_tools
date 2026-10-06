@@ -23,11 +23,10 @@ APP_DIR = Path(sys.executable if getattr(sys, "frozen", False) else __file__).re
 
 
 def _redirect_output() -> None:
-    """A windowed exe has no stdout/stderr; send them to a log file instead."""
-    if sys.stdout is None or sys.stderr is None:
+    """The Windows exe has no console; send stdout/stderr to a log file instead."""
+    if sys.stdout is None or sys.stderr is None or (getattr(sys, "frozen", False) and sys.platform == "win32"):
         log = open(APP_DIR / "GeminiVideoTool.log", "a", encoding="utf-8", buffering=1)
-        sys.stdout = sys.stdout or log
-        sys.stderr = sys.stderr or log
+        sys.stdout = sys.stderr = log
 
 
 def _port_in_use(port: int) -> bool:
